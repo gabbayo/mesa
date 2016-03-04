@@ -843,6 +843,7 @@ brw_compile_gs(const struct brw_compiler *compiler, void *log_data,
           likely(!(INTEL_DEBUG & DEBUG_NO_DUAL_OBJECT_GS))) {
          prog_data->base.dispatch_mode = DISPATCH_MODE_4X2_DUAL_OBJECT;
 
+         brw_gs_prog_data backup = *prog_data;
          vec4_gs_visitor v(compiler, log_data, &c, prog_data, shader,
                            mem_ctx, true /* no_spills */, shader_time_index);
          if (v.run()) {
@@ -850,6 +851,7 @@ brw_compile_gs(const struct brw_compiler *compiler, void *log_data,
                                               shader, &prog_data->base, v.cfg,
                                               final_assembly_size);
          }
+         *prog_data = backup;
       }
    }
 
