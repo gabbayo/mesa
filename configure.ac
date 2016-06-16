@@ -1657,6 +1657,10 @@ if test -n "$with_vulkan_drivers"; then
             HAVE_INTEL_VULKAN=yes;
 
             ;;
+        xradeon)
+            PKG_CHECK_MODULES([AMDGPU], [libdrm_amdgpu >= $LIBDRM_AMDGPU_REQUIRED])
+            HAVE_RADEON_VULKAN=yes;
+	    ;;
         *)
             AC_MSG_ERROR([Vulkan driver '$driver' does not exist])
             ;;
@@ -2536,6 +2540,7 @@ AM_CONDITIONAL(HAVE_R200_DRI, test x$HAVE_R200_DRI = xyes)
 AM_CONDITIONAL(HAVE_RADEON_DRI, test x$HAVE_RADEON_DRI = xyes)
 AM_CONDITIONAL(HAVE_SWRAST_DRI, test x$HAVE_SWRAST_DRI = xyes)
 
+AM_CONDITIONAL(HAVE_RADEON_VULKAN, test "x$HAVE_RADEON_VULKAN" = xyes)
 AM_CONDITIONAL(HAVE_INTEL_VULKAN, test "x$HAVE_INTEL_VULKAN" = xyes)
 
 AM_CONDITIONAL(HAVE_INTEL_DRIVERS, test "x$HAVE_INTEL_VULKAN" = xyes -o \
@@ -2625,6 +2630,7 @@ CXXFLAGS="$CXXFLAGS $USER_CXXFLAGS"
 dnl Substitute the config
 AC_CONFIG_FILES([Makefile
 		src/Makefile
+		src/amd/vulkan/Makefile
 		src/compiler/Makefile
 		src/egl/Makefile
 		src/egl/main/egl.pc

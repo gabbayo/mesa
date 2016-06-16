@@ -95,6 +95,10 @@ if HAVE_INTEL_VULKAN
 SUBDIRS += intel/vulkan
 endif
 
+if HAVE_RADEON_VULKAN
+SUBDIRS += amd/vulkan
+endif
+
 if HAVE_GALLIUM
 SUBDIRS += gallium
 endif
