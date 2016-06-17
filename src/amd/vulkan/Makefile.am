@@ -47,12 +47,16 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src \
 	-I$(top_builddir)/src/compiler \
 	-I$(top_srcdir)/src/compiler \
-	-I$(top_builddir)/src/compiler/nir \
 	-I$(top_srcdir)/src/mapi \
 	-I$(top_srcdir)/src/mesa \
 	-I$(top_srcdir)/src/mesa/drivers/dri/common \
 	-I$(top_srcdir)/src/gallium/auxiliary \
-	-I$(top_srcdir)/src/gallium/include
+	-I$(top_srcdir)/src/gallium/include \
+	-I$(srcdir)/addrlib \
+	-I$(srcdir)/addrlib/core \
+	-I$(srcdir)/addrlib/inc/chip/r800 \
+	-I$(srcdir)/addrlib/r800/chip \
+	-DBRAHMA_BUILD=1
 
 AM_CFLAGS = -Wno-override-init -msse2
 
