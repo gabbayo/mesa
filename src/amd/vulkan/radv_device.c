@@ -470,6 +470,44 @@ void radv_GetPhysicalDeviceMemoryProperties(
     VkPhysicalDeviceMemoryProperties*           pMemoryProperties)
 {
    RADV_FROM_HANDLE(radv_physical_device, physical_device, physicalDevice);
+   VkDeviceSize heap_size;
+   uint32_t memoryTypes = 2;
+   int ret;
+   struct amdgpu_heap_info vram_info, gtt_info;
+   
+   ret = amdgpu_query_heap_info(physical_device->dev, AMDGPU_GEM_DOMAIN_VRAM,
+				0, &vram_info);
+   
+   ret = amdgpu_query_heap_info(physical_device->dev, AMDGPU_GEM_DOMAIN_GTT,
+				0, &gtt_info);
+   
+   pMemoryProperties->memoryTypeCount = 3;
+   pMemoryProperties->memoryTypes[0] = (VkMemoryType) {
+     .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+     .heapIndex = 0,
+   };
+   pMemoryProperties->memoryTypes[1] = (VkMemoryType) {
+     .propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+     .heapIndex = 0,
+   };
+   pMemoryProperties->memoryTypes[2] = (VkMemoryType) {
+     .propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|
+     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+     VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+     .heapIndex = 1,
+   };
+
+   pMemoryProperties->memoryHeapCount = 2;
+   pMemoryProperties->memoryHeaps[0] = (VkMemoryHeap) {
+     .size = vram_info.heap_size,
+     .flags = VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
+   };
+   pMemoryProperties->memoryHeaps[1] = (VkMemoryHeap) {
+     .size = gtt_info.heap_size,
+     .flags = 0,
+   };
+   
 
 }
 PFN_vkVoidFunction radv_GetInstanceProcAddr(
@@ -792,7 +830,7 @@ void radv_GetImageMemoryRequirements(
     *
     * We support exactly one memory type.
     */
-   pMemoryRequirements->memoryTypeBits = 1;
+   pMemoryRequirements->memoryTypeBits = 0x7;
 
    pMemoryRequirements->size = image->size;
    pMemoryRequirements->alignment = image->alignment;

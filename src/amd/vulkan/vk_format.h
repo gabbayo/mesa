@@ -172,7 +172,7 @@ vk_format_get_blockheight(VkFormat format)
 
    return desc->block.height;
 }
-
+   
 /**
  * Return the index of the first non-void channel
  * -1 if no non-void channels

@@ -45,7 +45,7 @@
 #include "compiler/shader_enums.h"
 #include "util/macros.h"
 #include "util/list.h"
-
+#include "radv_amdgpu_surface.h"
 /* Pre-declarations needed for WSI entrypoints */
 struct wl_surface;
 struct wl_display;
@@ -80,7 +80,7 @@ extern "C" {
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-
+#define MAX2(a, b) ((a) > (b) ? (a) : (b))
 static inline uint32_t
 align_u32(uint32_t v, uint32_t a)
 {
@@ -660,7 +660,7 @@ struct radv_device {
 
     VkAllocationCallbacks                       alloc;
 
-   amdgpu_device_handle dev;
+    amdgpu_device_handle dev;
     struct radv_instance *                       instance;
     uint32_t                                    chipset_id;
 #if 0
@@ -1576,6 +1576,7 @@ struct radv_image {
     * allocate the depth and stencil buffers as separate surfaces in the same
     * bo.
     */
+   struct radeon_surf surface;
 #if 0
    union {
       struct anv_surface color_surface;
@@ -1617,17 +1618,17 @@ struct radv_image_view {
    uint32_t base_mip;
    VkExtent3D extent; /**< Extent of VkImageViewCreateInfo::baseMipLevel. */
 };
-#if 0
-struct anv_image_create_info {
+
+struct radv_image_create_info {
    const VkImageCreateInfo *vk_info;
-   isl_tiling_flags_t isl_tiling_flags;
    uint32_t stride;
 };
 
-VkResult anv_image_create(VkDevice _device,
-                          const struct anv_image_create_info *info,
+VkResult radv_image_create(VkDevice _device,
+                          const struct radv_image_create_info *info,
                           const VkAllocationCallbacks* alloc,
                           VkImage *pImage);
+#if 0
 
 struct anv_surface *
 anv_image_get_surface_for_aspect_mask(struct anv_image *image,
