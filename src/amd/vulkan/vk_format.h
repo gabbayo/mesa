@@ -4,6 +4,7 @@
 extern "C" {
 #endif
 
+#include <assert.h>
 #include <vulkan/vulkan.h>
 enum vk_format_layout {
    /**
@@ -111,6 +112,66 @@ struct vk_format_description
 extern const struct vk_format_description vk_format_description_table[];
 
 const struct vk_format_description *vk_format_description(VkFormat format);
+
+/**
+ * Return total bits needed for the pixel format per block.
+ */
+static inline uint
+vk_format_get_blocksizebits(VkFormat format)
+{
+   const struct vk_format_description *desc = vk_format_description(format);
+
+   assert(desc);
+   if (!desc) {
+      return 0;
+   }
+
+   return desc->block.bits;
+}
+
+/**
+ * Return bytes per block (not pixel) for the given format.
+ */
+static inline uint
+vk_format_get_blocksize(VkFormat format)
+{
+   uint bits = vk_format_get_blocksizebits(format);
+   uint bytes = bits / 8;
+
+   assert(bits % 8 == 0);
+   assert(bytes > 0);
+   if (bytes == 0) {
+      bytes = 1;
+   }
+
+   return bytes;
+}
+
+static inline uint
+vk_format_get_blockwidth(VkFormat format)
+{
+   const struct vk_format_description *desc = vk_format_description(format);
+
+   assert(desc);
+   if (!desc) {
+      return 1;
+   }
+
+   return desc->block.width;
+}
+
+static inline uint
+vk_format_get_blockheight(VkFormat format)
+{
+   const struct vk_format_description *desc = vk_format_description(format);
+
+   assert(desc);
+   if (!desc) {
+      return 1;
+   }
+
+   return desc->block.height;
+}
 
 /**
  * Return the index of the first non-void channel

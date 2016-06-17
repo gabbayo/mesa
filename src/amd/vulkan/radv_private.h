@@ -1862,6 +1862,21 @@ RADV_DEFINE_STRUCT_CASTS(radv_common, VkImageMemoryBarrier)
 #  undef genX
 #endif
 #endif
+
+static inline uint64_t
+align64(uint64_t value, unsigned alignment)
+{
+   return (value + alignment - 1) & ~(alignment - 1);
+}
+
+static inline unsigned
+u_minify(unsigned value, unsigned levels)
+{
+    return MAX2(1, value >> levels);
+}
+
+
+
 #ifdef __cplusplus
 }
 #endif
