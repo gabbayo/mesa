@@ -26,6 +26,7 @@
 #include <xcb/present.h>
 #include <errno.h>
 
+#include <unistd.h>
 #include "radv_wsi.h"
 #include "util/hash_table.h"
 
@@ -588,11 +589,8 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
    VkResult result = VK_SUCCESS;
 
    VkImage image_h;
-#if 0
    result = radv_image_create(radv_device_to_handle(device),
       &(struct radv_image_create_info) {
-         .isl_tiling_flags = ISL_TILING_X_BIT,
-         .stride = 0,
          .vk_info =
       &(VkImageCreateInfo) {
          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -632,10 +630,10 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
       goto fail_create_image;
 
    image->memory = radv_device_memory_from_handle(memory_h);
-   image->memory->bo.is_winsys_bo = true;
+   //   image->memory->bo.is_winsys_bo = true;
 
    radv_BindImageMemory(VK_NULL_HANDLE, image_h, memory_h, 0);
-
+#if 0
    struct radv_surface *surface = &image->image->color_surface;
    assert(surface->isl.tiling == ISL_TILING_X);
 
@@ -655,7 +653,6 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
                          "handle_to_fd failed: %m");
       goto fail_alloc_memory;
    }
-
    uint32_t bpp = 32;
    uint32_t depth = 24;
    image->pixmap = xcb_generate_id(chain->conn);
@@ -670,6 +667,7 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
                                           surface->isl.row_pitch,
                                           depth, bpp, fd);
    xcb_discard_reply(chain->conn, cookie.sequence);
+#endif
 
    int fence_fd = xshmfence_alloc_shm();
    if (fence_fd < 0)
@@ -705,7 +703,7 @@ fail_alloc_memory:
 fail_create_image:
    radv_DestroyImage(radv_device_to_handle(chain->base.device),
                     radv_image_to_handle(image->image), pAllocator);
-#endif
+
    return result;
 }
 
