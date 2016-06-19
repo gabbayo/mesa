@@ -102,16 +102,6 @@ void radv_CmdBindVertexBuffers(
 
 }
 
-void radv_CmdSetViewport(
-    VkCommandBuffer                             commandBuffer,
-    uint32_t                                    firstViewport,
-    uint32_t                                    viewportCount,
-    const VkViewport*                           pViewports)
-{
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-
-}
-
 void radv_CmdBindDescriptorSets(
     VkCommandBuffer                             commandBuffer,
     VkPipelineBindPoint                         pipelineBindPoint,
@@ -145,6 +135,51 @@ void radv_CmdBindPipeline(
 
 }
 
+void radv_CmdSetViewport(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    firstViewport,
+    uint32_t                                    viewportCount,
+    const VkViewport*                           pViewports)
+{
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+}
+
+void radv_CmdSetScissor(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    firstScissor,
+    uint32_t                                    scissorCount,
+    const VkRect2D*                             pScissors)
+{
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+
+}
+
+void radv_CmdSetLineWidth(
+    VkCommandBuffer                             commandBuffer,
+    float                                       lineWidth)
+{
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+}
+
+void radv_CmdSetDepthBias(
+    VkCommandBuffer                             commandBuffer,
+    float                                       depthBiasConstantFactor,
+    float                                       depthBiasClamp,
+    float                                       depthBiasSlopeFactor)
+{
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+}
+
+void radv_CmdSetBlendConstants(
+    VkCommandBuffer                             commandBuffer,
+    const float                                 blendConstants[4])
+{
+
+}
 void radv_CmdExecuteCommands(
     VkCommandBuffer                             commandBuffer,
     uint32_t                                    commandBufferCount,

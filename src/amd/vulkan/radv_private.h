@@ -535,6 +535,7 @@ struct radv_physical_device {
    amdgpu_device_handle dev;   
    struct amdgpu_gpu_info amdinfo;
 
+   ADDR_HANDLE addrlib;
 };
 
 struct radv_instance {
@@ -625,10 +626,9 @@ struct radv_queue {
     struct radv_state_pool *                     pool;
 };
 
-#if 0
-struct anv_pipeline_cache {
-   struct anv_device *                          device;
-   struct anv_state_stream                      program_stream;
+struct radv_pipeline_cache {
+   struct radv_device *                          device;
+  //   struct anv_state_stream                      program_stream;
    pthread_mutex_t                              mutex;
 
    uint32_t                                     total_size;
@@ -636,6 +636,7 @@ struct anv_pipeline_cache {
    uint32_t                                     kernel_count;
    uint32_t *                                   hash_table;
 };
+#if 0
 
 struct anv_pipeline_bind_map;
 
@@ -696,7 +697,7 @@ struct radv_device {
     pthread_mutex_t                             mutex;
   #endif
    struct radv_queue                            queue;
-
+   ADDR_HANDLE addrlib;
 };
 
 void radv_device_get_cache_uuid(void *uuid);
@@ -1706,11 +1707,12 @@ void anv_buffer_view_fill_image_param(struct anv_device *device,
                                       struct anv_buffer_view *view,
                                       struct brw_image_param *param);
 
-struct anv_sampler {
+#endif
+struct radv_sampler {
    uint32_t state[4];
 };
 
-#endif
+
 struct radv_framebuffer {
    uint32_t                                     width;
    uint32_t                                     height;

@@ -70,7 +70,7 @@ radv_graphics_pipeline_create(
 
    //   if (cache == NULL)
    //      cache = &device->default_pipeline_cache;
-
+   return VK_SUCCESS;
 }
 
 VkResult radv_CreateGraphicsPipelines(
@@ -82,8 +82,8 @@ VkResult radv_CreateGraphicsPipelines(
     VkPipeline*                                 pPipelines)
 {
    VkResult result = VK_SUCCESS;
+   unsigned i = 0;
 
-      unsigned i = 0;
    for (; i < count; i++) {
       result = radv_graphics_pipeline_create(_device,
                                             pipelineCache,

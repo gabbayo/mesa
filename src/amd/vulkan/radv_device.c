@@ -7,6 +7,9 @@
 
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
+#include "amdgpu_id.h"
+
+struct radv_dispatch_table dtable;
 
 static VkResult
 radv_physical_device_init(struct radv_physical_device *device,
@@ -41,6 +44,11 @@ radv_physical_device_init(struct radv_physical_device *device,
    result = radv_init_wsi(device);
    if (result != VK_SUCCESS)
        goto fail;
+
+   device->addrlib = radv_amdgpu_addr_create(&device->amdinfo, FAMILY_VI, VI_TONGA_P_A0);
+   if (!device->addrlib)
+     goto fail;
+
    return VK_SUCCESS;
 
 fail:
@@ -555,8 +563,9 @@ VkResult radv_CreateDevice(
    else
       device->alloc = physical_device->instance->alloc;
 
+   device->addrlib = physical_device->addrlib;
    *pDevice = radv_device_to_handle(device);
-   return result;
+   return VK_SUCCESS;
    
 }
 
@@ -659,6 +668,22 @@ VkResult radv_QueueSubmit(
    return VK_SUCCESS;
 }
 
+VkResult radv_QueueWaitIdle(
+    VkQueue                                     _queue)
+{
+   RADV_FROM_HANDLE(radv_queue, queue, _queue);
+
+   return RADV_CALL(DeviceWaitIdle)(radv_device_to_handle(queue->device));
+}
+
+VkResult radv_DeviceWaitIdle(
+    VkDevice                                    _device)
+{
+   RADV_FROM_HANDLE(radv_device, device, _device);
+
+   return VK_SUCCESS;
+}
+
 /* The loader wants us to expose a second GetInstanceProcAddr function
  * to work around certain LD_PRELOAD issues seen in apps.
  */
@@ -699,12 +724,6 @@ VkResult radv_AllocateMemory(
       return VK_SUCCESS;
    }
 
-   /* We support exactly one memory heap. */
-   assert(pAllocateInfo->memoryTypeIndex == 0 ||
-          (!device->info.has_llc && pAllocateInfo->memoryTypeIndex < 2));
-
-   /* FINISHME: Fail if allocation request exceeds heap size. */
-
    mem = radv_alloc2(&device->alloc, pAllocator, sizeof(*mem), 8,
                     VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (mem == NULL)
@@ -716,7 +735,11 @@ VkResult radv_AllocateMemory(
    memset(&alloc_buffer, 0, sizeof(alloc_buffer));
    alloc_buffer.alloc_size = alloc_size;
    alloc_buffer.phys_alignment = 4096;
-   alloc_buffer.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+   if (pAllocateInfo->memoryTypeIndex == 2)
+     alloc_buffer.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
+   else
+     alloc_buffer.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+     
    ret = amdgpu_bo_alloc(device->dev, &alloc_buffer, &mem->bo.handle);
    if (ret != 0) {
       result = VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -808,7 +831,7 @@ void radv_GetBufferMemoryRequirements(
     *
     * We support exactly one memory type.
     */
-   pMemoryRequirements->memoryTypeBits = 1;
+   pMemoryRequirements->memoryTypeBits = 0x7;
 
    pMemoryRequirements->size = buffer->size;
    pMemoryRequirements->alignment = 16;
@@ -938,7 +961,33 @@ VkResult radv_WaitForFences(
 
    return VK_SUCCESS;
 }
- 
+
+
+
+// Queue semaphore functions
+
+VkResult radv_CreateSemaphore(
+    VkDevice                                    device,
+    const VkSemaphoreCreateInfo*                pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkSemaphore*                                pSemaphore)
+{
+   /* The DRM execbuffer ioctl always execute in-oder, even between different
+    * rings. As such, there's nothing to do for the user space semaphore.
+    */
+
+   *pSemaphore = (VkSemaphore)1;
+
+   return VK_SUCCESS;
+}
+
+void radv_DestroySemaphore(
+    VkDevice                                    device,
+    VkSemaphore                                 semaphore,
+    const VkAllocationCallbacks*                pAllocator)
+{
+}
+
 VkResult radv_CreateBuffer(
     VkDevice                                    _device,
     const VkBufferCreateInfo*                   pCreateInfo,
@@ -1038,4 +1087,24 @@ void vkCmdDbgMarkerBegin(
 void vkCmdDbgMarkerEnd(
     VkCommandBuffer                              commandBuffer)
 {
+}
+
+VkResult radv_CreateSampler(
+    VkDevice                                    _device,
+    const VkSamplerCreateInfo*                  pCreateInfo,
+    const VkAllocationCallbacks*                pAllocator,
+    VkSampler*                                  pSampler)
+{
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   struct radv_sampler *sampler;
+
+   assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO);
+
+   sampler = radv_alloc2(&device->alloc, pAllocator, sizeof(*sampler), 8,
+                        VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (!sampler)
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+   *pSampler = radv_sampler_to_handle(sampler);
+
+   return VK_SUCCESS;
 }

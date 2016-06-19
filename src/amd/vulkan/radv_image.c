@@ -1,5 +1,6 @@
 #include "radv_private.h"
 #include "vk_format.h"
+#include "radv_amdgpu_surface.h"
 static unsigned
 radv_choose_tiling(struct radv_device *Device,
 		   const struct radv_image_create_info *create_info)
@@ -35,7 +36,7 @@ radv_init_surface(struct radv_device *device,
 
    surface->bpe = vk_format_get_blocksize(pCreateInfo->format);
 
-   surface->nsamples = 0;
+   surface->nsamples = 1;
    surface->flags = RADEON_SURF_SET(array_mode, MODE);
 
    switch (pCreateInfo->imageType){
@@ -90,23 +91,16 @@ radv_image_create(VkDevice _device,
    image->type = pCreateInfo->imageType;
    image->extent = pCreateInfo->extent;
    image->vk_format = pCreateInfo->format;
-   //   image->aspects = vk_format_aspects(image->vk_format);
    image->levels = pCreateInfo->mipLevels;
    image->array_size = pCreateInfo->arrayLayers;
    image->samples = pCreateInfo->samples;
-   //   image->usage = radv_image_get_full_usage(pCreateInfo, image->aspects);
    image->tiling = pCreateInfo->tiling;
 
+   radv_init_surface(device, &image->surface, create_info);
 
-   image->size = 4096;
-   uint32_t b;
-#if 0
-   for_each_bit(b, image->aspects) {
-      r = make_surface(device, image, create_info, (1 << b));
-      if (r != VK_SUCCESS)
-         goto fail;
-   }
-#endif
+   radv_amdgpu_surface_init(device->addrlib, &image->surface);
+   image->size = image->surface.bo_size;
+
    *pImage = radv_image_to_handle(image);
 
    return VK_SUCCESS;
@@ -150,6 +144,8 @@ void radv_GetImageSubresourceLayout(
 {
    RADV_FROM_HANDLE(radv_image, image, _image);
 
+   pLayout->rowPitch = image->surface.level[0].pitch_bytes;
+   pLayout->size = image->surface.bo_size;
 }
 
 

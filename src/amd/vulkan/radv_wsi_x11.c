@@ -585,7 +585,7 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
                struct x11_image *image)
 {
    xcb_void_cookie_t cookie;
-   VkResult result;
+   VkResult result = VK_SUCCESS;
 
    VkImage image_h;
 #if 0
