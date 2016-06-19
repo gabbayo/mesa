@@ -49,6 +49,7 @@ VULKAN_FILES := \
 	radv_image.c \
         radv_pass.c \
 	radv_pipeline.c \
+	radv_pipeline_cache.c \
 	radv_util.c \
 	radv_wsi.c \
 	radv_amdgpu_surface.c \
