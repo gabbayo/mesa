@@ -696,6 +696,7 @@ VkResult radv_AllocateMemory(
    VkResult result;
    struct amdgpu_bo_alloc_request alloc_buffer;
    int ret;
+   enum radeon_bo_domain domain;
    assert(pAllocateInfo->sType == VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO);
 
    if (pAllocateInfo->allocationSize == 0) {
@@ -709,22 +710,13 @@ VkResult radv_AllocateMemory(
    if (mem == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   /* The kernel is going to give us whole pages anyway */
-   uint64_t alloc_size = align_u64(pAllocateInfo->allocationSize, 4096);
-
-   memset(&alloc_buffer, 0, sizeof(alloc_buffer));
-   alloc_buffer.alloc_size = alloc_size;
-   alloc_buffer.phys_alignment = 4096;
+   uint64_t alloc_size = align_u64(pAllocateInfo->allocationSize, 4096);\
    if (pAllocateInfo->memoryTypeIndex == 2)
-     alloc_buffer.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
+     domain = RADEON_DOMAIN_GTT;
    else
-     alloc_buffer.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
-     
-   ret = amdgpu_bo_alloc(device->ws->dev, &alloc_buffer, &mem->bo.handle);
-   if (ret != 0) {
-      result = VK_ERROR_OUT_OF_HOST_MEMORY;
-      goto fail;
-   }
+     domain = RADEON_DOMAIN_VRAM;
+   mem->bo.bo = amdgpu_create_bo(device->ws, alloc_size, 4096,
+				 0, domain, 0);
 
    mem->type_index = pAllocateInfo->memoryTypeIndex;
 
@@ -749,15 +741,9 @@ void radv_FreeMemory(
    if (mem == NULL)
       return;
 
-   amdgpu_bo_free(mem->bo.handle);
-   mem->bo.handle = 0;
-#if 0
-   if (mem->bo.map)
-      radv_gem_munmap(mem->bo.map, mem->bo.size);
+   amdgpu_bo_destroy(mem->bo.bo);
+   mem->bo.bo = NULL;
 
-   if (mem->bo.gem_handle != 0)
-      radv_gem_close(device, mem->bo.gem_handle);
-#endif
    radv_free2(&device->alloc, pAllocator, mem);
 }
 
@@ -777,7 +763,7 @@ VkResult radv_MapMemory(
       return VK_SUCCESS;
    }
 
-   ret = amdgpu_bo_cpu_map(mem->bo.handle, ppData);
+   ret = amdgpu_bo_map(mem->bo.bo, ppData);
    if (ret == 0)
       return VK_SUCCESS;
    return VK_ERROR_MEMORY_MAP_FAILED;
@@ -792,7 +778,7 @@ void radv_UnmapMemory(
    if (mem == NULL)
       return;
 
-   amdgpu_bo_cpu_unmap(mem->bo.handle);
+   amdgpu_bo_unmap(mem->bo.bo);
 }
 
 void radv_GetBufferMemoryRequirements(

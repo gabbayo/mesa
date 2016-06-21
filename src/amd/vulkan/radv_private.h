@@ -46,7 +46,7 @@
 #include "util/macros.h"
 #include "util/list.h"
 #include "radv_amdgpu_surface.h"
-
+#include "radv_amdgpu_bo.h"
 #include "radv_amdgpu_winsys.h"
 
 /* Pre-declarations needed for WSI entrypoints */
@@ -282,9 +282,7 @@ radv_vector_finish(struct radv_vector *queue)
 
 
 struct radv_bo {
-   amdgpu_bo_handle handle;
-   amdgpu_va_handle va_handle;
-   uint64_t va;
+   struct amdgpu_winsys_bo *bo;
 };
 
 #if 0

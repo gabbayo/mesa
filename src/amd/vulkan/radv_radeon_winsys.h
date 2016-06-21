@@ -2,6 +2,32 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#define CALLOC(_count, _size) calloc(_count, _size)
+#ifndef CALLOC_STRUCT
+#define CALLOC_STRUCT(T)   (struct T *) CALLOC(1, sizeof(struct T))
+#define FREE(_ptr) free(_ptr)
+
+#endif
+
+enum radeon_bo_domain { /* bitfield */
+    RADEON_DOMAIN_GTT  = 2,
+    RADEON_DOMAIN_VRAM = 4,
+    RADEON_DOMAIN_VRAM_GTT = RADEON_DOMAIN_VRAM | RADEON_DOMAIN_GTT
+};
+
+enum radeon_bo_flag { /* bitfield */
+    RADEON_FLAG_GTT_WC =        (1 << 0),
+    RADEON_FLAG_CPU_ACCESS =    (1 << 1),
+    RADEON_FLAG_NO_CPU_ACCESS = (1 << 2),
+};
+
+enum radeon_bo_usage { /* bitfield */
+    RADEON_USAGE_READ = 2,
+    RADEON_USAGE_WRITE = 4,
+    RADEON_USAGE_READWRITE = RADEON_USAGE_READ | RADEON_USAGE_WRITE
+};
+
 enum radeon_family {
     CHIP_UNKNOWN = 0,
     CHIP_R300, /* R3xx-based cores. */

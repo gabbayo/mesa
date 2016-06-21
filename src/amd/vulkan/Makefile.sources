@@ -44,6 +44,7 @@ RADV_AMDGPU_FILES := \
 	radv_amdgpu_winsys.c \
 	radv_amdgpu_winsys.h \
 	radv_amdgpu_surface.c \
+	radv_amdgpu_bo.c \
 	radv_amdgpu_cs.c
 
 VULKAN_FILES := \
