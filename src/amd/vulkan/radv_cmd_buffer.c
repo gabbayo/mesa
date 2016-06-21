@@ -28,7 +28,7 @@ static VkResult radv_create_cmd_buffer(
       list_inithead(&cmd_buffer->pool_link);
    }
 
-   cmd_buffer->cs = radv_amdgpu_cs_create();
+   cmd_buffer->cs = radv_amdgpu_cs_create(device->ws);
    *pCommandBuffer = radv_cmd_buffer_to_handle(cmd_buffer);
 
    return VK_SUCCESS;
