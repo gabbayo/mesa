@@ -18,7 +18,15 @@ static VkResult radv_create_cmd_buffer(
    cmd_buffer->device = device;
    cmd_buffer->pool = pool;
    cmd_buffer->level = level;
-   //   cmd_buffer->state.attachments = NULL;
+
+   if (pool) {
+      list_addtail(&cmd_buffer->pool_link, &pool->cmd_buffers);
+   } else {
+      /* Init the pool_link so we can safefly call list_del when we destroy
+       * the command buffer
+       */
+      list_inithead(&cmd_buffer->pool_link);
+   }
 
    *pCommandBuffer = radv_cmd_buffer_to_handle(cmd_buffer);
 
@@ -58,6 +66,7 @@ VkResult radv_AllocateCommandBuffers(
 static void
 radv_cmd_buffer_destroy(struct radv_cmd_buffer *cmd_buffer)
 {
+   list_del(&cmd_buffer->pool_link);
    radv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 }
 
