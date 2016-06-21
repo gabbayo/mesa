@@ -91,7 +91,6 @@ radv_shader_compile_to_nir(struct radv_device *device,
       entry_point = exec_node_data(nir_function, node, node);
    } else {
       uint32_t *spirv = (uint32_t *) module->data;
-      assert(spirv[0] == SPIR_V_MAGIC_NUMBER);
       assert(module->size % 4 == 0);
 
       uint32_t num_spec_entries = 0;

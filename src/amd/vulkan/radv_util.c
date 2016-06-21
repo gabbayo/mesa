@@ -30,6 +30,8 @@
 
 #include "radv_private.h"
 
+#include "util/u_math.h"
+
 /** Log an error message.  */
 void radv_printflike(1, 2)
 radv_loge(const char *format, ...)
