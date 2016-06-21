@@ -109,6 +109,15 @@ enum chip_class {
     VI,
 };
 
+enum ring_type {
+    RING_GFX = 0,
+    RING_COMPUTE,
+    RING_DMA,
+    RING_UVD,
+    RING_VCE,
+    RING_LAST,
+};
+
 struct radeon_info {
     /* PCI info: domain:bus:dev:func */
     uint32_t                    pci_domain;

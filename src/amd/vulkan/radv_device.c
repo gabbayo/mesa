@@ -8,7 +8,7 @@
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
 #include "amdgpu_id.h"
-
+#include "radv_amdgpu_cs.h"
 struct radv_dispatch_table dtable;
 
 static VkResult
@@ -655,11 +655,20 @@ VkResult radv_QueueSubmit(
     const VkSubmitInfo*                         pSubmits,
     VkFence                                     _fence)
 {
-  //  RADV_FROM_HANDLE(radv_queue, queue, _queue);
+  RADV_FROM_HANDLE(radv_queue, queue, _queue);
   //   RADV_FROM_HANDLE(radv_fence, fence, _fence);
-  //   struct radv_device *device = queue->device;
-  //   int ret;
+  struct radv_device *device = queue->device;
+  int ret;
 
+  for (uint32_t i = 0; i < submitCount; i++) {
+    for (uint32_t j = 0; j < pSubmits[i].commandBufferCount; j++) {
+      RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer,
+		       pSubmits[i].pCommandBuffers[j]);
+      assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+      ret = radv_amdgpu_cs_submit(queue->hw_ctx, cmd_buffer->cs);
+    }
+  }
    return VK_SUCCESS;
 }
 
