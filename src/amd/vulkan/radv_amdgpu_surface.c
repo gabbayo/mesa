@@ -1,7 +1,7 @@
 #include <errno.h>
 #include "radv_private.h"
 #include "addrlib/addrinterface.h"
-
+#include "util/bitset.h"
 
 #ifndef NO_ENTRIES
 #define NO_ENTRIES 32

@@ -80,7 +80,7 @@ extern "C" {
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MAX2(a, b) ((a) > (b) ? (a) : (b))
+
 static inline uint32_t
 align_u32(uint32_t v, uint32_t a)
 {
@@ -1339,10 +1339,11 @@ struct anv_event {
    struct anv_state                             state;
 };
 
-struct nir_shader;
 #endif
-struct radv_shader_module {
+  struct nir_shader;
 
+struct radv_shader_module {
+   struct nir_shader *                          nir;
    unsigned char                                sha1[20];
    uint32_t                                     size;
    char                                         data[0];
@@ -1384,64 +1385,20 @@ struct anv_pipeline_bind_map {
    struct anv_pipeline_binding *                sampler_to_descriptor;
    uint32_t *                                   surface_to_attachment;
 };
-
-struct anv_pipeline {
-   struct anv_device *                          device;
-   struct anv_batch                             batch;
-   uint32_t                                     batch_data[512];
-   struct anv_reloc_list                        batch_relocs;
+#endif
+struct radv_pipeline {
+   struct radv_device *                          device;
    uint32_t                                     dynamic_state_mask;
-   struct anv_dynamic_state                     dynamic_state;
+  //   struct radv_dynamic_state                     dynamic_state;
 
-   struct anv_pipeline_layout *                 layout;
-   struct anv_pipeline_bind_map                 bindings[MESA_SHADER_STAGES];
+  //   struct radv_pipeline_layout *                 layout;
 
    bool                                         use_repclear;
    bool                                         needs_data_cache;
 
-   const struct brw_stage_prog_data *           prog_data[MESA_SHADER_STAGES];
-   uint32_t                                     scratch_start[MESA_SHADER_STAGES];
-   uint32_t                                     total_scratch;
-   struct {
-      uint32_t                                  start[MESA_SHADER_GEOMETRY + 1];
-      uint32_t                                  size[MESA_SHADER_GEOMETRY + 1];
-      uint32_t                                  entries[MESA_SHADER_GEOMETRY + 1];
-      const struct anv_l3_config *              l3_config;
-      uint32_t                                  total_size;
-   } urb;
-
    VkShaderStageFlags                           active_stages;
-   struct anv_state                             blend_state;
-   uint32_t                                     vs_simd8;
-   uint32_t                                     vs_vec4;
-   uint32_t                                     ps_ksp0;
-   uint32_t                                     gs_kernel;
-   uint32_t                                     cs_simd;
-
-   uint32_t                                     vb_used;
-   uint32_t                                     binding_stride[MAX_VBS];
-   bool                                         instancing_enable[MAX_VBS];
-   bool                                         primitive_restart;
-   uint32_t                                     topology;
-
-   uint32_t                                     cs_right_mask;
-
-   struct {
-      uint32_t                                  sf[7];
-      uint32_t                                  depth_stencil_state[3];
-   } gen7;
-
-   struct {
-      uint32_t                                  sf[4];
-      uint32_t                                  raster[5];
-      uint32_t                                  wm_depth_stencil[3];
-   } gen8;
-
-   struct {
-      uint32_t                                  wm_depth_stencil[4];
-   } gen9;
 };
-
+#if 0
 static inline const struct brw_vs_prog_data *
 get_vs_prog_data(struct anv_pipeline *pipeline)
 {
@@ -1478,13 +1435,13 @@ struct radv_graphics_pipeline_create_info {
    bool                                         use_rectlist;
 };
 
-#if 0
 VkResult
-anv_pipeline_init(struct anv_pipeline *pipeline, struct anv_device *device,
-                  struct anv_pipeline_cache *cache,
+radv_pipeline_init(struct radv_pipeline *pipeline, struct radv_device *device,
+                  struct radv_pipeline_cache *cache,
                   const VkGraphicsPipelineCreateInfo *pCreateInfo,
-                  const struct anv_graphics_pipeline_create_info *extra,
+                  const struct radv_graphics_pipeline_create_info *extra,
                   const VkAllocationCallbacks *alloc);
+#if 0
 
 VkResult
 anv_pipeline_compile_cs(struct anv_pipeline *pipeline,
@@ -1865,19 +1822,6 @@ RADV_DEFINE_STRUCT_CASTS(radv_common, VkImageMemoryBarrier)
 #  undef genX
 #endif
 #endif
-
-static inline uint64_t
-align64(uint64_t value, unsigned alignment)
-{
-   return (value + alignment - 1) & ~(alignment - 1);
-}
-
-static inline unsigned
-u_minify(unsigned value, unsigned levels)
-{
-    return MAX2(1, value >> levels);
-}
-
 
 
 #ifdef __cplusplus
