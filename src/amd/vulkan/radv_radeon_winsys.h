@@ -3,12 +3,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#define CALLOC(_count, _size) calloc(_count, _size)
-#ifndef CALLOC_STRUCT
-#define CALLOC_STRUCT(T)   (struct T *) CALLOC(1, sizeof(struct T))
-#define FREE(_ptr) free(_ptr)
+#include "main/macros.h"
 
-#endif
+#define FREE(x) free(x)
 
 enum radeon_bo_domain { /* bitfield */
     RADEON_DOMAIN_GTT  = 2,

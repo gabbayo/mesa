@@ -98,8 +98,10 @@ VkResult radv_BeginCommandBuffer(
     VkCommandBuffer                             commandBuffer,
     const VkCommandBufferBeginInfo*             pBeginInfo)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-   
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+   /* setup initial configuration into command buffer */
+   si_init_config(cmd_buffer->device->ws, cmd_buffer->cs);
    return VK_SUCCESS;
 }
 

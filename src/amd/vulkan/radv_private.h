@@ -45,6 +45,7 @@
 #include "compiler/shader_enums.h"
 #include "util/macros.h"
 #include "util/list.h"
+#include "main/macros.h"
 #include "radv_amdgpu_surface.h"
 #include "radv_amdgpu_bo.h"
 #include "radv_amdgpu_winsys.h"
@@ -1268,6 +1269,9 @@ struct radv_cmd_buffer {
    VkCommandBufferLevel                         level;
    struct radeon_winsys_cs *cs;
 };
+
+void si_init_config(struct amdgpu_winsys *ws,
+		    struct radeon_winsys_cs *cs);
 #if 0
 VkResult anv_cmd_buffer_init_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
 void anv_cmd_buffer_fini_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
