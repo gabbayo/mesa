@@ -29,3 +29,5 @@ static inline void radeon_emit_array(struct radeon_winsys_cs *cs,
 }
 
 
+struct radeon_winsys_cs *radv_amdgpu_cs_create(void);
+void radv_amdgpu_cs_destroy(struct radeon_winsys_cs *rcs);

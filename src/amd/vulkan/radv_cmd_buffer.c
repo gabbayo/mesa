@@ -1,5 +1,5 @@
 #include "radv_private.h"
-
+#include "radv_amdgpu_cs.h"
 static VkResult radv_create_cmd_buffer(
     struct radv_device *                         device,
     struct radv_cmd_pool *                       pool,
@@ -28,6 +28,7 @@ static VkResult radv_create_cmd_buffer(
       list_inithead(&cmd_buffer->pool_link);
    }
 
+   cmd_buffer->cs = radv_amdgpu_cs_create();
    *pCommandBuffer = radv_cmd_buffer_to_handle(cmd_buffer);
 
    return VK_SUCCESS;
@@ -67,6 +68,8 @@ static void
 radv_cmd_buffer_destroy(struct radv_cmd_buffer *cmd_buffer)
 {
    list_del(&cmd_buffer->pool_link);
+
+   radv_amdgpu_cs_destroy(cmd_buffer->cs);
    radv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 }
 

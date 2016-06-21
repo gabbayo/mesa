@@ -1266,6 +1266,7 @@ struct radv_cmd_buffer {
 
    VkCommandBufferUsageFlags                    usage_flags;
    VkCommandBufferLevel                         level;
+   struct radeon_winsys_cs *cs;
 };
 #if 0
 VkResult anv_cmd_buffer_init_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
