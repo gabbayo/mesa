@@ -498,11 +498,24 @@ void radv_GetPhysicalDeviceMemoryProperties(
    
 
 }
-PFN_vkVoidFunction radv_GetInstanceProcAddr(
-    VkInstance                                  instance,
-    const char*                                 pName)
+
+static VkResult
+radv_queue_init(struct radv_device *device, struct radv_queue *queue)
 {
-   return radv_lookup_entrypoint(pName);
+   int r;
+   queue->_loader_data.loaderMagic = ICD_LOADER_MAGIC;
+   queue->device = device;
+
+   r = amdgpu_cs_ctx_create(device->ws->dev, &queue->hw_ctx);
+   if (!r)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+   return VK_SUCCESS;
+}
+
+static void
+radv_queue_finish(struct radv_queue *queue)
+{
+   amdgpu_cs_ctx_free(queue->hw_ctx);
 }
 
 VkResult radv_CreateDevice(
@@ -543,7 +556,7 @@ VkResult radv_CreateDevice(
    else
       device->alloc = physical_device->instance->alloc;
 
-
+   radv_queue_init(device, &device->queue);
    *pDevice = radv_device_to_handle(device);
    return VK_SUCCESS;
    
@@ -554,6 +567,8 @@ void radv_DestroyDevice(
     const VkAllocationCallbacks*                pAllocator)
 {
    RADV_FROM_HANDLE(radv_device, device, _device);
+
+   radv_queue_finish(&device->queue);
    radv_free(&device->alloc, device);
 }
 
@@ -662,6 +677,13 @@ VkResult radv_DeviceWaitIdle(
   //   RADV_FROM_HANDLE(radv_device, device, _device);
 
    return VK_SUCCESS;
+}
+
+PFN_vkVoidFunction radv_GetInstanceProcAddr(
+    VkInstance                                  instance,
+    const char*                                 pName)
+{
+   return radv_lookup_entrypoint(pName);
 }
 
 /* The loader wants us to expose a second GetInstanceProcAddr function

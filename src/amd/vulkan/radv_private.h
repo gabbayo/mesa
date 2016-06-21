@@ -625,6 +625,8 @@ struct radv_queue {
     struct radv_device *                         device;
 
     struct radv_state_pool *                     pool;
+
+    amdgpu_context_handle                        hw_ctx;
 };
 
 struct radv_pipeline_cache {
