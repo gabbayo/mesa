@@ -98,7 +98,7 @@ radv_image_create(VkDevice _device,
 
    radv_init_surface(device, &image->surface, create_info);
 
-   radv_amdgpu_surface_init(device->addrlib, &image->surface);
+   radv_amdgpu_surface_init(device->ws->addrlib, &image->surface);
    image->size = image->surface.bo_size;
 
    *pImage = radv_image_to_handle(image);

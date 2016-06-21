@@ -18,7 +18,6 @@ radv_physical_device_init(struct radv_physical_device *device,
 {
    VkResult result;
    int fd;
-   uint32_t drm_major, drm_minor, r;
    
    fd = open(path, O_RDWR | O_CLOEXEC);
    if (fd < 0)
@@ -31,23 +30,11 @@ radv_physical_device_init(struct radv_physical_device *device,
    assert(strlen(path) < ARRAY_SIZE(device->path));
    strncpy(device->path, path, ARRAY_SIZE(device->path));
 
-   r = amdgpu_device_initialize(fd, &drm_major, &drm_minor, &device->dev);
-   if (r)
-      return vk_errorf(VK_ERROR_INITIALIZATION_FAILED,
-		       "failed to initialized device\n");
-
-   r = amdgpu_query_gpu_info(device->dev, &device->amdinfo);
-   if (r)
-      return vk_errorf(VK_ERROR_INITIALIZATION_FAILED,
-		       "failed to query amdgpu info\n");
+   device->ws = amdgpu_winsys_create(fd);
 
    result = radv_init_wsi(device);
    if (result != VK_SUCCESS)
        goto fail;
-
-   device->addrlib = radv_amdgpu_addr_create(&device->amdinfo, FAMILY_VI, VI_TONGA_P_A0);
-   if (!device->addrlib)
-     goto fail;
 
    return VK_SUCCESS;
 
@@ -442,7 +429,7 @@ void radv_GetPhysicalDeviceProperties(
       .apiVersion = VK_MAKE_VERSION(1, 0, 5),
       .driverVersion = 1,
       .vendorID = 0x1002,
-      .deviceID = pdevice->amdinfo.asic_id,
+      .deviceID = pdevice->ws->amdinfo.asic_id,
       .deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
       .limits = limits,
       .sparseProperties = {0}, /* Broadwell doesn't do sparse. */
@@ -481,13 +468,6 @@ void radv_GetPhysicalDeviceMemoryProperties(
    VkDeviceSize heap_size;
    uint32_t memoryTypes = 2;
    int ret;
-   struct amdgpu_heap_info vram_info, gtt_info;
-   
-   ret = amdgpu_query_heap_info(physical_device->dev, AMDGPU_GEM_DOMAIN_VRAM,
-				0, &vram_info);
-   
-   ret = amdgpu_query_heap_info(physical_device->dev, AMDGPU_GEM_DOMAIN_GTT,
-				0, &gtt_info);
    
    pMemoryProperties->memoryTypeCount = 3;
    pMemoryProperties->memoryTypes[0] = (VkMemoryType) {
@@ -508,11 +488,11 @@ void radv_GetPhysicalDeviceMemoryProperties(
 
    pMemoryProperties->memoryHeapCount = 2;
    pMemoryProperties->memoryHeaps[0] = (VkMemoryHeap) {
-     .size = vram_info.heap_size,
+     .size = physical_device->ws->info.vram_size,
      .flags = VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
    };
    pMemoryProperties->memoryHeaps[1] = (VkMemoryHeap) {
-     .size = gtt_info.heap_size,
+     .size = physical_device->ws->info.gart_size,
      .flags = 0,
    };
    
@@ -557,13 +537,13 @@ VkResult radv_CreateDevice(
    device->_loader_data.loaderMagic = ICD_LOADER_MAGIC;
    device->instance = physical_device->instance;
 
-   device->dev = physical_device->dev;
+   device->ws = physical_device->ws;
    if (pAllocator)
       device->alloc = *pAllocator;
    else
       device->alloc = physical_device->instance->alloc;
 
-   device->addrlib = physical_device->addrlib;
+
    *pDevice = radv_device_to_handle(device);
    return VK_SUCCESS;
    
@@ -740,7 +720,7 @@ VkResult radv_AllocateMemory(
    else
      alloc_buffer.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
      
-   ret = amdgpu_bo_alloc(device->dev, &alloc_buffer, &mem->bo.handle);
+   ret = amdgpu_bo_alloc(device->ws->dev, &alloc_buffer, &mem->bo.handle);
    if (ret != 0) {
       result = VK_ERROR_OUT_OF_HOST_MEMORY;
       goto fail;

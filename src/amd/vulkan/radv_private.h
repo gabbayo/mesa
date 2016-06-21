@@ -46,6 +46,9 @@
 #include "util/macros.h"
 #include "util/list.h"
 #include "radv_amdgpu_surface.h"
+
+#include "radv_amdgpu_winsys.h"
+
 /* Pre-declarations needed for WSI entrypoints */
 struct wl_surface;
 struct wl_display;
@@ -280,6 +283,8 @@ radv_vector_finish(struct radv_vector *queue)
 
 struct radv_bo {
    amdgpu_bo_handle handle;
+   amdgpu_va_handle va_handle;
+   uint64_t va;
 };
 
 #if 0
@@ -522,6 +527,8 @@ struct radv_physical_device {
    VK_LOADER_DATA                              _loader_data;
 
    struct radv_instance *                       instance;
+
+   struct amdgpu_winsys *ws;
    uint32_t                                    chipset_id;
    char                                        path[20];
    const char *                                name;
@@ -532,10 +539,6 @@ struct radv_physical_device {
    uint32_t                    pci_device_id;
 
    struct radv_wsi_interface *                  wsi[VK_ICD_WSI_PLATFORM_MAX];
-   amdgpu_device_handle dev;   
-   struct amdgpu_gpu_info amdinfo;
-
-   ADDR_HANDLE addrlib;
 };
 
 struct radv_instance {
@@ -661,9 +664,9 @@ struct radv_device {
 
     VkAllocationCallbacks                       alloc;
 
-    amdgpu_device_handle dev;
     struct radv_instance *                       instance;
     uint32_t                                    chipset_id;
+    struct amdgpu_winsys *ws;
 #if 0
     struct brw_device_info                      info;
     struct isl_device                           isl_dev;
@@ -697,7 +700,6 @@ struct radv_device {
     pthread_mutex_t                             mutex;
   #endif
    struct radv_queue                            queue;
-   ADDR_HANDLE addrlib;
 };
 
 void radv_device_get_cache_uuid(void *uuid);

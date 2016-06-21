@@ -104,6 +104,7 @@ VULKAN_LIB_DEPS += \
 	$(top_builddir)/src/compiler/nir/libnir.la \
 	$(top_builddir)/src/util/libmesautil.la \
 	$(PER_GEN_LIBS) \
+	$(LIBDRM_LIBS) \
 	$(PTHREAD_LIBS) \
 	$(DLOPEN_LIBS) \
 	-lm
