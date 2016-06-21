@@ -1,4 +1,4 @@
-#include "radv_cs_helper.h"
+#include "radv_amdgpu_cs.h"
 #include <stdlib.h>
 #include <amdgpu.h>
 enum ib_type {
