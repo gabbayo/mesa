@@ -245,7 +245,7 @@ void radv_GetPhysicalDeviceFeatures(
     VkPhysicalDevice                            physicalDevice,
     VkPhysicalDeviceFeatures*                   pFeatures)
 {
-   RADV_FROM_HANDLE(radv_physical_device, pdevice, physicalDevice);
+  //   RADV_FROM_HANDLE(radv_physical_device, pdevice, physicalDevice);
 
    *pFeatures = (VkPhysicalDeviceFeatures) {
       .robustBufferAccess                       = true,
@@ -640,10 +640,10 @@ VkResult radv_QueueSubmit(
     const VkSubmitInfo*                         pSubmits,
     VkFence                                     _fence)
 {
-   RADV_FROM_HANDLE(radv_queue, queue, _queue);
-   RADV_FROM_HANDLE(radv_fence, fence, _fence);
-   struct radv_device *device = queue->device;
-   int ret;
+  //  RADV_FROM_HANDLE(radv_queue, queue, _queue);
+  //   RADV_FROM_HANDLE(radv_fence, fence, _fence);
+  //   struct radv_device *device = queue->device;
+  //   int ret;
 
    return VK_SUCCESS;
 }
@@ -659,7 +659,7 @@ VkResult radv_QueueWaitIdle(
 VkResult radv_DeviceWaitIdle(
     VkDevice                                    _device)
 {
-   RADV_FROM_HANDLE(radv_device, device, _device);
+  //   RADV_FROM_HANDLE(radv_device, device, _device);
 
    return VK_SUCCESS;
 }
@@ -755,7 +755,7 @@ VkResult radv_MapMemory(
     VkMemoryMapFlags                            flags,
     void**                                      ppData)
 {
-   RADV_FROM_HANDLE(radv_device, device, _device);
+  //   RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_device_memory, mem, _memory);
    int ret;
    if (mem == NULL) {
@@ -897,9 +897,9 @@ VkResult radv_CreateFence(
     const VkAllocationCallbacks*                pAllocator,
     VkFence*                                    pFence)
 {
-   RADV_FROM_HANDLE(radv_device, device, _device);
+  //   RADV_FROM_HANDLE(radv_device, device, _device);
    struct radv_bo fence_bo;
-   struct radv_fence *fence;
+   struct radv_fence *fence = NULL;
    VkResult result;
    *pFence = radv_fence_to_handle(fence);
 
@@ -911,8 +911,8 @@ void radv_DestroyFence(
     VkFence                                     _fence,
     const VkAllocationCallbacks*                pAllocator)
 {
-   RADV_FROM_HANDLE(radv_device, device, _device);
-   RADV_FROM_HANDLE(radv_fence, fence, _fence);
+  //   RADV_FROM_HANDLE(radv_device, device, _device);
+  //   RADV_FROM_HANDLE(radv_fence, fence, _fence);
 
 }
 
@@ -923,7 +923,7 @@ VkResult radv_WaitForFences(
     VkBool32                                    waitAll,
     uint64_t                                    timeout)
 {
-   RADV_FROM_HANDLE(radv_device, device, _device);
+  //   RADV_FROM_HANDLE(radv_device, device, _device);
 
    return VK_SUCCESS;
 }

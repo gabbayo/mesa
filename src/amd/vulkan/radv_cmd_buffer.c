@@ -78,7 +78,7 @@ VkResult radv_ResetCommandBuffer(
     VkCommandBuffer                             commandBuffer,
     VkCommandBufferResetFlags                   flags)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
    return VK_SUCCESS;//radv_cmd_buffer_reset(cmd_buffer);
 }
 
@@ -86,7 +86,7 @@ VkResult radv_BeginCommandBuffer(
     VkCommandBuffer                             commandBuffer,
     const VkCommandBufferBeginInfo*             pBeginInfo)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
    
    return VK_SUCCESS;
 }
@@ -98,7 +98,7 @@ void radv_CmdBindVertexBuffers(
     const VkBuffer*                             pBuffers,
     const VkDeviceSize*                         pOffsets)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
 }
 
@@ -112,16 +112,16 @@ void radv_CmdBindDescriptorSets(
     uint32_t                                    dynamicOffsetCount,
     const uint32_t*                             pDynamicOffsets)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-   RADV_FROM_HANDLE(radv_pipeline_layout, layout, _layout);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_pipeline_layout, layout, _layout);
 
 }
 
 VkResult radv_EndCommandBuffer(
     VkCommandBuffer                             commandBuffer)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-   struct radv_device *device = cmd_buffer->device;
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   struct radv_device *device = cmd_buffer->device;
    return VK_SUCCESS;
 }
 
@@ -130,8 +130,8 @@ void radv_CmdBindPipeline(
     VkPipelineBindPoint                         pipelineBindPoint,
     VkPipeline                                  _pipeline)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-   RADV_FROM_HANDLE(radv_pipeline, pipeline, _pipeline);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_pipeline, pipeline, _pipeline);
 
 }
 
@@ -141,7 +141,7 @@ void radv_CmdSetViewport(
     uint32_t                                    viewportCount,
     const VkViewport*                           pViewports)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  // RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
 }
 
@@ -151,7 +151,7 @@ void radv_CmdSetScissor(
     uint32_t                                    scissorCount,
     const VkRect2D*                             pScissors)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  // RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
 
 }
@@ -160,7 +160,7 @@ void radv_CmdSetLineWidth(
     VkCommandBuffer                             commandBuffer,
     float                                       lineWidth)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
 }
 
@@ -170,7 +170,7 @@ void radv_CmdSetDepthBias(
     float                                       depthBiasClamp,
     float                                       depthBiasSlopeFactor)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
 }
 
@@ -185,14 +185,14 @@ void radv_CmdExecuteCommands(
     uint32_t                                    commandBufferCount,
     const VkCommandBuffer*                      pCmdBuffers)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, primary, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, primary, commandBuffer);
 
-   assert(primary->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  //   assert(primary->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
    for (uint32_t i = 0; i < commandBufferCount; i++) {
-      RADV_FROM_HANDLE(radv_cmd_buffer, secondary, pCmdBuffers[i]);
+     //      RADV_FROM_HANDLE(radv_cmd_buffer, secondary, pCmdBuffers[i]);
 
-      assert(secondary->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+     //      assert(secondary->level == VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 
       //.     radv_cmd_buffer_add_secondary(primary, secondary);
    }
@@ -260,9 +260,9 @@ void radv_CmdBeginRenderPass(
     const VkRenderPassBeginInfo*                pRenderPassBegin,
     VkSubpassContents                           contents)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-   RADV_FROM_HANDLE(radv_render_pass, pass, pRenderPassBegin->renderPass);
-   RADV_FROM_HANDLE(radv_framebuffer, framebuffer, pRenderPassBegin->framebuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  // RADV_FROM_HANDLE(radv_render_pass, pass, pRenderPassBegin->renderPass);
+  //RADV_FROM_HANDLE(radv_framebuffer, framebuffer, pRenderPassBegin->framebuffer);
 
 }
 
@@ -273,13 +273,13 @@ void radv_CmdDraw(
     uint32_t                                    firstVertex,
     uint32_t                                    firstInstance)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 }
 
 void radv_CmdEndRenderPass(
     VkCommandBuffer                             commandBuffer)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
    //   radv_cmd_buffer_resolve_subpass(cmd_buffer);
 }
@@ -296,6 +296,6 @@ void radv_CmdPipelineBarrier(
     uint32_t                                    imageMemoryBarrierCount,
     const VkImageMemoryBarrier*                 pImageMemoryBarriers)
 {
-   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
 }
