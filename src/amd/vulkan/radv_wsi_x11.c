@@ -27,6 +27,7 @@
 #include <errno.h>
 
 #include <unistd.h>
+#include "intel/vulkan/vk_format_info.h"
 #include "radv_wsi.h"
 #include "util/hash_table.h"
 
