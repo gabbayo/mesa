@@ -31,8 +31,11 @@ amdgpu_cs(struct radeon_winsys_cs *base)
 
 static void amdgpu_cs_destroy(struct radeon_winsys_cs *rcs)
 {
-
-
+   struct amdgpu_cs *cs = amdgpu_cs(rcs);
+   cs->ws->base.buffer_destroy(cs->ib_buffer);
+   free(cs->handles);
+   free(cs->priorities);
+   free(cs);
 }
 
 static boolean amdgpu_init_cs(struct amdgpu_cs *cs,
