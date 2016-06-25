@@ -16,7 +16,7 @@ struct amdgpu_cs {
   unsigned                    max_num_buffers;
   unsigned                    num_buffers;
   amdgpu_bo_handle            *handles;
-  uint8_t                     *flags;
+  uint8_t                     *priorities;
   //  struct amdgpu_cs_buffer     *buffers;
 };
 
@@ -89,7 +89,33 @@ struct radeon_winsys_cs *radv_amdgpu_cs_create(struct amdgpu_winsys *ws)
   cs->base.buf = (uint32_t *)cs->ib_mapped;
   cs->base.max_dw = ib_size / 4;
 
+  radv_amdgpu_cs_add_buffer(&cs->base, cs->ib_buffer, 8);
   return &cs->base;
+}
+
+void radv_amdgpu_cs_add_buffer(struct radeon_winsys_cs *rcs,
+                               struct amdgpu_winsys_bo *bo,
+                               uint8_t priority)
+{
+   struct amdgpu_cs *cs = amdgpu_cs(rcs);
+
+   for (unsigned i = 0; i < cs->num_buffers; ++i) {
+      if (cs->handles[i] == bo->bo) {
+         cs->priorities[i] = MAX2(cs->priorities[i], priority);
+         return;
+      }
+   }
+
+   if (cs->num_buffers == cs->max_num_buffers) {
+      unsigned new_count = cs->max_num_buffers * 2;
+      cs->handles = realloc(cs->handles, new_count * sizeof(amdgpu_bo_handle));
+      cs->priorities = realloc(cs->priorities, new_count * sizeof(uint8_t));
+      cs->max_num_buffers = new_count;
+   }
+
+   cs->handles[cs->num_buffers] = bo->bo;
+   cs->priorities[cs->num_buffers] = priority;
+   ++cs->num_buffers;
 }
 
 int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,

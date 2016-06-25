@@ -5,7 +5,10 @@
 #include <assert.h>
 #include "r600d_common.h"
 #include <amdgpu.h>
+
 struct amdgpu_winsys;
+struct amdgpu_winsys_bo;
+
 struct radeon_winsys_cs {
     unsigned cdw;  /* Number of used dwords. */
     unsigned max_dw; /* Maximum number of dwords. */
@@ -83,6 +86,10 @@ static inline void radeon_set_uconfig_reg(struct radeon_winsys_cs *cs, unsigned 
 struct radeon_winsys_cs *radv_amdgpu_cs_create(struct amdgpu_winsys *ws);
 
 void radv_amdgpu_cs_destroy(struct radeon_winsys_cs *rcs);
+
+void radv_amdgpu_cs_add_buffer(struct radeon_winsys_cs *rcs,
+                               struct amdgpu_winsys_bo *bo,
+                               uint8_t priority);
 
 int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,
 			  struct radeon_winsys_cs *rcs);
