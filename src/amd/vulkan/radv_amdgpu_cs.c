@@ -7,6 +7,7 @@
 
 struct amdgpu_cs {
   struct radeon_winsys_cs base;
+  struct amdgpu_winsys *ws;
 
   struct amdgpu_cs_request    request;
   struct amdgpu_cs_ib_info    ib;
@@ -71,6 +72,8 @@ struct radeon_winsys_cs *radv_amdgpu_cs_create(struct amdgpu_winsys *ws)
   if (!cs)
     return NULL;
 
+  cs->ws = ws;
+
   cs->ib_buffer = amdgpu_create_bo(ws, ib_size, 0, 0,
 				   RADEON_DOMAIN_GTT,
 				   RADEON_FLAG_CPU_ACCESS);
@@ -123,9 +126,19 @@ int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,
 {
    int r;
    struct amdgpu_cs *cs = amdgpu_cs(rcs);
+   amdgpu_bo_list_handle bo_list;
 
    if (!cs->base.cdw)
       return true;
+
+   r = amdgpu_bo_list_create(cs->ws->dev, cs->num_buffers, cs->handles,
+                             cs->priorities, &bo_list);
+   if (r) {
+      fprintf(stderr, "amdgpu: Failed to created the BO list for submission\n");
+      return r;
+   }
+
+   cs->request.resources = bo_list;
    cs->ib.size = cs->base.cdw;
 
    r = amdgpu_cs_submit(hw_ctx, 0, &cs->request, 1);
@@ -136,6 +149,8 @@ int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,
          fprintf(stderr, "amdgpu: The CS has been rejected, "
                  "see dmesg for more information.\n");
    }
+
+   amdgpu_bo_list_destroy(bo_list);
 
    return 0;
 }
