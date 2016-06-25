@@ -92,4 +92,5 @@ void radv_amdgpu_cs_add_buffer(struct radeon_winsys_cs *rcs,
                                uint8_t priority);
 
 int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,
-			  struct radeon_winsys_cs *rcs);
+			  struct radeon_winsys_cs *rcs,
+			  struct amdgpu_cs_fence *fence);

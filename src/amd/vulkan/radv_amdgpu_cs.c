@@ -122,7 +122,8 @@ void radv_amdgpu_cs_add_buffer(struct radeon_winsys_cs *rcs,
 }
 
 int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,
-			  struct radeon_winsys_cs *rcs)
+			  struct radeon_winsys_cs *rcs,
+			  struct amdgpu_cs_fence *fence)
 {
    int r;
    struct amdgpu_cs *cs = amdgpu_cs(rcs);
@@ -151,6 +152,14 @@ int radv_amdgpu_cs_submit(amdgpu_context_handle hw_ctx,
    }
 
    amdgpu_bo_list_destroy(bo_list);
+
+   if (fence) {
+      fence->context = hw_ctx;
+      fence->ip_type = cs->request.ip_type;
+      fence->ip_instance = cs->request.ip_instance;
+      fence->ring = cs->request.ring;
+      fence->fence = cs->request.seq_no;
+   }
 
    return 0;
 }

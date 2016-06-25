@@ -11,6 +11,13 @@
 #include "radv_amdgpu_cs.h"
 struct radv_dispatch_table dtable;
 
+
+struct radv_fence {
+   struct amdgpu_cs_fence fence;
+   bool submitted;
+   bool signalled;
+};
+
 static VkResult
 radv_physical_device_init(struct radv_physical_device *device,
 			  struct radv_instance *instance,
@@ -656,8 +663,9 @@ VkResult radv_QueueSubmit(
     VkFence                                     _fence)
 {
   RADV_FROM_HANDLE(radv_queue, queue, _queue);
-  //   RADV_FROM_HANDLE(radv_fence, fence, _fence);
+  RADV_FROM_HANDLE(radv_fence, fence, _fence);
   struct radv_device *device = queue->device;
+  struct amdgpu_cs_fence *base_fence = fence ? &fence->fence : NULL;
   int ret;
 
   for (uint32_t i = 0; i < submitCount; i++) {
@@ -666,9 +674,12 @@ VkResult radv_QueueSubmit(
 		       pSubmits[i].pCommandBuffers[j]);
       assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-      ret = radv_amdgpu_cs_submit(queue->hw_ctx, cmd_buffer->cs);
+      ret = radv_amdgpu_cs_submit(queue->hw_ctx, cmd_buffer->cs, base_fence);
     }
   }
+   if (fence)
+      fence->submitted = true;
+
    return VK_SUCCESS;
 }
 
@@ -928,10 +939,18 @@ VkResult radv_CreateFence(
     const VkAllocationCallbacks*                pAllocator,
     VkFence*                                    pFence)
 {
-  //   RADV_FROM_HANDLE(radv_device, device, _device);
-   struct radv_bo fence_bo;
-   struct radv_fence *fence = NULL;
-   VkResult result;
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   struct radv_fence *fence = radv_alloc2(&device->alloc, pAllocator,
+                                          sizeof(*fence), 8,
+                                          VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+
+   if (!fence)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+   memset(fence, 0, sizeof(*fence));
+   fence->submitted = false;
+   fence->signalled = !!(pCreateInfo->flags & VK_FENCE_CREATE_SIGNALED_BIT);
+
    *pFence = radv_fence_to_handle(fence);
 
    return VK_SUCCESS;
@@ -942,9 +961,23 @@ void radv_DestroyFence(
     VkFence                                     _fence,
     const VkAllocationCallbacks*                pAllocator)
 {
-  //   RADV_FROM_HANDLE(radv_device, device, _device);
-  //   RADV_FROM_HANDLE(radv_fence, fence, _fence);
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_fence, fence, _fence);
 
+   radv_free2(&device->alloc, pAllocator, fence);
+}
+
+static uint64_t radv_get_absolute_timeout(uint64_t timeout)
+{
+   uint64_t current_time;
+   struct timespec tv;
+
+   clock_gettime(CLOCK_MONOTONIC, &tv);
+   current_time = tv.tv_nsec + tv.tv_sec*1000000000ull;
+
+   timeout = MIN2(UINT64_MAX - current_time, timeout);
+
+   return current_time + timeout;
 }
 
 VkResult radv_WaitForFences(
@@ -954,7 +987,34 @@ VkResult radv_WaitForFences(
     VkBool32                                    waitAll,
     uint64_t                                    timeout)
 {
-  //   RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   timeout = radv_get_absolute_timeout(timeout);
+
+   if (!waitAll) {
+      fprintf(stderr, "radv: WaitForFences without waitAll not implemented yet\n");
+   }
+
+   for (uint32_t i = 0; i < fenceCount; ++i) {
+      RADV_FROM_HANDLE(radv_fence, fence, pFences[i]);
+      uint32_t expired = 0;
+
+      assert(fence->submitted);
+      if (fence->signalled)
+         continue;
+
+      int r = amdgpu_cs_query_fence_status(&fence->fence, timeout,
+                                           AMDGPU_QUERY_FENCE_TIMEOUT_IS_ABSOLUTE,
+                                           &expired);
+      if (r) {
+          fprintf(stderr, "radv: amdgpu_cs_query_fence_status failed\n");
+         /* TODO: find a suitable error code / action for the failure. */
+      }
+
+      if (!expired)
+         return VK_TIMEOUT;
+
+      fence->signalled = true;
+   }
 
    return VK_SUCCESS;
 }
