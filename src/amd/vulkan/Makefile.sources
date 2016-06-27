@@ -41,11 +41,11 @@ ADDRLIB_FILES := \
 	addrlib/r800/siaddrlib.h
 
 RADV_WS_AMDGPU_FILES := \
-	radv_amdgpu_winsys.c \
-	radv_amdgpu_winsys.h \
-	radv_amdgpu_surface.c \
-	radv_amdgpu_bo.c \
-	radv_amdgpu_cs.c
+	winsys/amdgpu/radv_amdgpu_winsys.c \
+	winsys/amdgpu/radv_amdgpu_winsys.h \
+	winsys/amdgpu/radv_amdgpu_surface.c \
+	winsys/amdgpu/radv_amdgpu_bo.c \
+	winsys/amdgpu/radv_amdgpu_cs.c
 
 VULKAN_FILES := \
 	$(ADDRLIB_FILES) \

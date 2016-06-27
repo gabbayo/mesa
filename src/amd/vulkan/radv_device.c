@@ -8,7 +8,7 @@
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
 #include "amdgpu_id.h"
-#include "radv_amdgpu_winsys_public.h"
+#include "winsys/amdgpu/radv_amdgpu_winsys_public.h"
 struct radv_dispatch_table dtable;
 
 
