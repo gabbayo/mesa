@@ -29,6 +29,19 @@ amdgpu_cs(struct radeon_winsys_cs *base)
    return (struct amdgpu_cs*)base;
 }
 
+
+static struct radeon_winsys_fence *amdgpu_create_fence()
+{
+   struct amdgpu_cs_fence *fence = calloc(1, sizeof(struct amdgpu_cs_fence));
+   return (struct radeon_winsys_fence*)fence;
+}
+
+static void amdgpu_destroy_fence(struct radeon_winsys_fence *_fence)
+{
+   struct amdgpu_cs_fence *fence = (struct amdgpu_cs_fence *)_fence;
+   free(fence);
+}
+
 static void amdgpu_cs_destroy(struct radeon_winsys_cs *rcs)
 {
    struct amdgpu_cs *cs = amdgpu_cs(rcs);
@@ -204,4 +217,6 @@ void radv_amdgpu_cs_init_functions(struct amdgpu_winsys *ws)
    ws->base.cs_destroy = amdgpu_cs_destroy;
    ws->base.cs_add_buffer = amdgpu_cs_add_buffer;
    ws->base.cs_submit = amdgpu_winsys_cs_submit;
+   ws->base.create_fence = amdgpu_create_fence;
+   ws->base.destroy_fence = amdgpu_destroy_fence;
 }

@@ -304,6 +304,9 @@ struct radeon_winsys {
 
    int (*surface_best)(struct radeon_winsys *ws,
 		       struct radeon_surf *surf);
+
+   struct radeon_winsys_fence *(*create_fence)();
+   void (*destroy_fence)(struct radeon_winsys_fence *fence);
 };
 
 static inline void radeon_emit(struct radeon_winsys_cs *cs, uint32_t value)

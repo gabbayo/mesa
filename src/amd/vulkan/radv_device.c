@@ -951,6 +951,8 @@ VkResult radv_CreateFence(
    memset(fence, 0, sizeof(*fence));
    fence->submitted = false;
    fence->signalled = !!(pCreateInfo->flags & VK_FENCE_CREATE_SIGNALED_BIT);
+   fence->fence = device->ws->create_fence();
+
 
    *pFence = radv_fence_to_handle(fence);
 
@@ -965,6 +967,7 @@ void radv_DestroyFence(
    RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_fence, fence, _fence);
 
+   device->ws->destroy_fence(fence->fence);
    radv_free2(&device->alloc, pAllocator, fence);
 }
 
@@ -1003,7 +1006,7 @@ VkResult radv_WaitForFences(
       if (fence->signalled)
          continue;
 
-      int r = amdgpu_cs_query_fence_status(&fence->fence, timeout,
+      int r = amdgpu_cs_query_fence_status(fence->fence, timeout,
                                            AMDGPU_QUERY_FENCE_TIMEOUT_IS_ABSOLUTE,
                                            &expired);
       if (r) {
