@@ -283,6 +283,8 @@ struct radeon_winsys {
 
    void (*buffer_unmap)(struct radeon_winsys_bo *bo);
 
+   uint64_t (*buffer_get_va)(struct radeon_winsys_bo *bo);
+
    struct radeon_winsys_ctx *(*ctx_create)(struct radeon_winsys *ws);
    void (*ctx_destroy)(struct radeon_winsys_ctx *ctx);
 

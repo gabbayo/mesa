@@ -84,6 +84,12 @@ error_va_alloc:
    return NULL;
 }
 
+static uint64_t amdgpu_winsys_bo_get_va(struct radeon_winsys_bo *_bo)
+{
+   struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
+   return bo->va;
+}
+
 static void *
 amdgpu_winsys_bo_map(struct radeon_winsys_bo *_bo)
 {
@@ -107,6 +113,7 @@ void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws)
 {
    ws->base.buffer_create = amdgpu_winsys_bo_create;
    ws->base.buffer_destroy = amdgpu_winsys_bo_destroy;
+   ws->base.buffer_get_va = amdgpu_winsys_bo_get_va;
    ws->base.buffer_map = amdgpu_winsys_bo_map;
    ws->base.buffer_unmap = amdgpu_winsys_bo_unmap;
 }
