@@ -1659,6 +1659,7 @@ if test -n "$with_vulkan_drivers"; then
             ;;
         xradeon)
             PKG_CHECK_MODULES([AMDGPU], [libdrm_amdgpu >= $LIBDRM_AMDGPU_REQUIRED])
+            radeon_llvm_check "radv" "3" "9" "0"
             HAVE_RADEON_VULKAN=yes;
 	    ;;
         *)
@@ -2141,7 +2142,7 @@ if test "x$enable_gallium_llvm" = xauto; then
     i*86|x86_64|amd64) enable_gallium_llvm=yes;;
     esac
 fi
-if test "x$enable_gallium_llvm" = xyes; then
+if test "x$enable_gallium_llvm" = xyes || test "x$HAVE_RADEON_VULKAN" = xyes; then
     if test -n "$llvm_prefix"; then
         AC_PATH_TOOL([LLVM_CONFIG], [llvm-config], [no], ["$llvm_prefix/bin"])
     else
@@ -2310,7 +2311,7 @@ radeon_llvm_check() {
     if test "x$enable_gallium_llvm" != "xyes"; then
         AC_MSG_ERROR([--enable-gallium-llvm is required when building $1])
     fi
-    llvm_check_version_for "3" "6" "0" $1
+    llvm_check_version_for $2 $3 $4 $1
     if test true && $LLVM_CONFIG --targets-built | grep -iqvw $amdgpu_llvm_target_name ; then
         AC_MSG_ERROR([LLVM $amdgpu_llvm_target_name not enabled in your LLVM build.])
     fi
@@ -2366,7 +2367,7 @@ if test -n "$with_gallium_drivers"; then
             gallium_require_drm "Gallium R600"
             gallium_require_drm_loader
             if test "x$enable_opencl" = xyes; then
-                radeon_llvm_check "r600g"
+                radeon_llvm_check "r600g" "3" "6" "0"
                 LLVM_COMPONENTS="${LLVM_COMPONENTS} bitreader asmparser"
             fi
             ;;
@@ -2376,7 +2377,7 @@ if test -n "$with_gallium_drivers"; then
             PKG_CHECK_MODULES([AMDGPU], [libdrm_amdgpu >= $LIBDRM_AMDGPU_REQUIRED])
             gallium_require_drm "radeonsi"
             gallium_require_drm_loader
-            radeon_llvm_check "radeonsi"
+            radeon_llvm_check "radeonsi" "3" "6" "0"
             require_egl_drm "radeonsi"
             ;;
         xnouveau)

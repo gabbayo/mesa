@@ -59,7 +59,9 @@ AM_CPPFLAGS = \
 	-I$(srcdir)/addrlib/r800/chip \
 	-DBRAHMA_BUILD=1
 
-AM_CFLAGS = -Wno-override-init -msse2
+AM_CFLAGS = -Wno-override-init -msse2 \
+	$(PTHREAD_CFLAGS) \
+	$(LLVM_CFLAGS)
 
 libradv_ci_la_CFLAGS = $(AM_CFLAGS) -DHW_VERSION=CI
 libradv_ci_la_SOURCES = $(GEN7_FILES)
@@ -104,6 +106,8 @@ VULKAN_LIB_DEPS += \
 	$(top_builddir)/src/compiler/nir/libnir.la \
 	$(top_builddir)/src/util/libmesautil.la \
 	$(PER_GEN_LIBS) \
+	$(LLVM_LIBS) \
+	$(PTHREAD_LIBS) \
 	$(LIBDRM_LIBS) \
 	$(PTHREAD_LIBS) \
 	$(DLOPEN_LIBS) \
@@ -144,6 +148,7 @@ libvulkan_radeon_la_LDFLAGS = \
 	-module \
 	-no-undefined \
 	-avoid-version \
+	$(LLVM_LDFLAGS) \
 	$(GC_SECTIONS) \
 	$(LD_NO_UNDEFINED)
 
