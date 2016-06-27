@@ -1,6 +1,5 @@
 #include "radv_private.h"
 #include "vk_format.h"
-#include "radv_amdgpu_surface.h"
 static unsigned
 radv_choose_tiling(struct radv_device *Device,
 		   const struct radv_image_create_info *create_info)
@@ -98,7 +97,7 @@ radv_image_create(VkDevice _device,
 
    radv_init_surface(device, &image->surface, create_info);
 
-   radv_amdgpu_surface_init(device->ws->addrlib, &image->surface);
+   device->ws->surface_init(device->ws, &image->surface);
    image->size = image->surface.bo_size;
 
    *pImage = radv_image_to_handle(image);

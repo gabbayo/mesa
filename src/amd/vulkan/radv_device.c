@@ -8,12 +8,12 @@
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
 #include "amdgpu_id.h"
-#include "radv_amdgpu_cs.h"
+#include "radv_amdgpu_winsys_public.h"
 struct radv_dispatch_table dtable;
 
 
 struct radv_fence {
-   struct amdgpu_cs_fence fence;
+   struct radeon_winsys_fence *fence;
    bool submitted;
    bool signalled;
 };
@@ -39,6 +39,7 @@ radv_physical_device_init(struct radv_physical_device *device,
 
    device->ws = amdgpu_winsys_create(fd);
 
+   device->ws->query_info(device->ws, &device->rad_info);
    result = radv_init_wsi(device);
    if (result != VK_SUCCESS)
        goto fail;
@@ -436,7 +437,7 @@ void radv_GetPhysicalDeviceProperties(
       .apiVersion = VK_MAKE_VERSION(1, 0, 5),
       .driverVersion = 1,
       .vendorID = 0x1002,
-      .deviceID = pdevice->ws->amdinfo.asic_id,
+      .deviceID = pdevice->rad_info.pci_id,
       .deviceType = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU,
       .limits = limits,
       .sparseProperties = {0}, /* Broadwell doesn't do sparse. */
@@ -495,11 +496,11 @@ void radv_GetPhysicalDeviceMemoryProperties(
 
    pMemoryProperties->memoryHeapCount = 2;
    pMemoryProperties->memoryHeaps[0] = (VkMemoryHeap) {
-     .size = physical_device->ws->info.vram_size,
+     .size = physical_device->rad_info.vram_size,
      .flags = VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
    };
    pMemoryProperties->memoryHeaps[1] = (VkMemoryHeap) {
-     .size = physical_device->ws->info.gart_size,
+     .size = physical_device->rad_info.gart_size,
      .flags = 0,
    };
    
@@ -509,12 +510,11 @@ void radv_GetPhysicalDeviceMemoryProperties(
 static VkResult
 radv_queue_init(struct radv_device *device, struct radv_queue *queue)
 {
-   int r;
    queue->_loader_data.loaderMagic = ICD_LOADER_MAGIC;
    queue->device = device;
 
-   r = amdgpu_cs_ctx_create(device->ws->dev, &queue->hw_ctx);
-   if (!r)
+   queue->hw_ctx = device->ws->ctx_create(device->ws);
+   if (!queue->hw_ctx)
       return VK_ERROR_OUT_OF_HOST_MEMORY;
    return VK_SUCCESS;
 }
@@ -522,7 +522,7 @@ radv_queue_init(struct radv_device *device, struct radv_queue *queue)
 static void
 radv_queue_finish(struct radv_queue *queue)
 {
-   amdgpu_cs_ctx_free(queue->hw_ctx);
+   queue->device->ws->ctx_destroy(queue->hw_ctx);
 }
 
 VkResult radv_CreateDevice(
@@ -665,7 +665,7 @@ VkResult radv_QueueSubmit(
   RADV_FROM_HANDLE(radv_queue, queue, _queue);
   RADV_FROM_HANDLE(radv_fence, fence, _fence);
   struct radv_device *device = queue->device;
-  struct amdgpu_cs_fence *base_fence = fence ? &fence->fence : NULL;
+  struct radeon_winsys_fence *base_fence = fence ? fence->fence : NULL;
   int ret;
 
   for (uint32_t i = 0; i < submitCount; i++) {
@@ -674,7 +674,7 @@ VkResult radv_QueueSubmit(
 		       pSubmits[i].pCommandBuffers[j]);
       assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-      ret = radv_amdgpu_cs_submit(queue->hw_ctx, cmd_buffer->cs, base_fence);
+      ret = queue->device->ws->cs_submit(queue->hw_ctx, cmd_buffer->cs, base_fence);
     }
   }
    if (fence)
@@ -757,8 +757,8 @@ VkResult radv_AllocateMemory(
      domain = RADEON_DOMAIN_GTT;
    else
      domain = RADEON_DOMAIN_VRAM;
-   mem->bo.bo = amdgpu_create_bo(device->ws, alloc_size, 4096,
-				 0, domain, 0);
+   mem->bo.bo = device->ws->buffer_create(device->ws, alloc_size, 4096,
+					  domain, 0);
 
    mem->type_index = pAllocateInfo->memoryTypeIndex;
 
@@ -783,7 +783,7 @@ void radv_FreeMemory(
    if (mem == NULL)
       return;
 
-   amdgpu_bo_destroy(mem->bo.bo);
+   device->ws->buffer_destroy(mem->bo.bo);
    mem->bo.bo = NULL;
 
    radv_free2(&device->alloc, pAllocator, mem);
@@ -797,7 +797,7 @@ VkResult radv_MapMemory(
     VkMemoryMapFlags                            flags,
     void**                                      ppData)
 {
-  //   RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_device_memory, mem, _memory);
    int ret;
    if (mem == NULL) {
@@ -805,8 +805,8 @@ VkResult radv_MapMemory(
       return VK_SUCCESS;
    }
 
-   ret = amdgpu_bo_map(mem->bo.bo, ppData);
-   if (ret == 0)
+   *ppData = device->ws->buffer_map(mem->bo.bo);
+   if (*ppData)
       return VK_SUCCESS;
    return VK_ERROR_MEMORY_MAP_FAILED;
 }
@@ -815,12 +815,13 @@ void radv_UnmapMemory(
     VkDevice                                    _device,
     VkDeviceMemory                              _memory)
 {
+   RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_device_memory, mem, _memory);
 
    if (mem == NULL)
       return;
 
-   amdgpu_bo_unmap(mem->bo.bo);
+   device->ws->buffer_unmap(mem->bo.bo);
 }
 
 void radv_GetBufferMemoryRequirements(

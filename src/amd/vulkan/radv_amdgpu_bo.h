@@ -9,13 +9,11 @@ struct amdgpu_winsys_bo {
    uint64_t size;
 };
 
-void amdgpu_bo_destroy(struct amdgpu_winsys_bo *);
-struct amdgpu_winsys_bo *amdgpu_create_bo(struct amdgpu_winsys *ws,
-					  uint64_t size,
-					  unsigned alignment,
-					  unsigned usage,
-					  enum radeon_bo_domain initial_domain,
-					  unsigned flags);
+static inline
+struct amdgpu_winsys_bo *amdgpu_winsys_bo(struct radeon_winsys_bo *bo)
+{
+   return (struct amdgpu_winsys_bo *)bo;
+}
 
-int amdgpu_bo_map(struct amdgpu_winsys_bo *bo, void **data);
-void amdgpu_bo_unmap(struct amdgpu_winsys_bo *bo);
+void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws);
+

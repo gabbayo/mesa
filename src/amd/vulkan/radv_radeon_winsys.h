@@ -118,6 +118,12 @@ enum ring_type {
     RING_LAST,
 };
 
+struct radeon_winsys_cs {
+    unsigned cdw;  /* Number of used dwords. */
+    unsigned max_dw; /* Maximum number of dwords. */
+    uint32_t *buf; /* The base pointer of the chunk. */
+};
+
 struct radeon_info {
     /* PCI info: domain:bus:dev:func */
     uint32_t                    pci_domain;
@@ -169,3 +175,146 @@ struct radeon_info {
     uint32_t                    si_tile_mode_array[32];
     uint32_t                    cik_macrotile_mode_array[16];
 };
+
+#define RADEON_SURF_MAX_LEVEL                   32
+
+#define RADEON_SURF_TYPE_MASK                   0xFF
+#define RADEON_SURF_TYPE_SHIFT                  0
+#define     RADEON_SURF_TYPE_1D                     0
+#define     RADEON_SURF_TYPE_2D                     1
+#define     RADEON_SURF_TYPE_3D                     2
+#define     RADEON_SURF_TYPE_CUBEMAP                3
+#define     RADEON_SURF_TYPE_1D_ARRAY               4
+#define     RADEON_SURF_TYPE_2D_ARRAY               5
+#define RADEON_SURF_MODE_MASK                   0xFF
+#define RADEON_SURF_MODE_SHIFT                  8
+#define     RADEON_SURF_MODE_LINEAR_ALIGNED         1
+#define     RADEON_SURF_MODE_1D                     2
+#define     RADEON_SURF_MODE_2D                     3
+#define RADEON_SURF_SCANOUT                     (1 << 16)
+#define RADEON_SURF_ZBUFFER                     (1 << 17)
+#define RADEON_SURF_SBUFFER                     (1 << 18)
+#define RADEON_SURF_Z_OR_SBUFFER                (RADEON_SURF_ZBUFFER | RADEON_SURF_SBUFFER)
+#define RADEON_SURF_HAS_SBUFFER_MIPTREE         (1 << 19)
+#define RADEON_SURF_HAS_TILE_MODE_INDEX         (1 << 20)
+#define RADEON_SURF_FMASK                       (1 << 21)
+#define RADEON_SURF_DISABLE_DCC                 (1 << 22)
+
+#define RADEON_SURF_GET(v, field)   (((v) >> RADEON_SURF_ ## field ## _SHIFT) & RADEON_SURF_ ## field ## _MASK)
+#define RADEON_SURF_SET(v, field)   (((v) & RADEON_SURF_ ## field ## _MASK) << RADEON_SURF_ ## field ## _SHIFT)
+#define RADEON_SURF_CLR(v, field)   ((v) & ~(RADEON_SURF_ ## field ## _MASK << RADEON_SURF_ ## field ## _SHIFT))
+
+struct radeon_surf_level {
+    uint64_t                    offset;
+    uint64_t                    slice_size;
+    uint32_t                    npix_x;
+    uint32_t                    npix_y;
+    uint32_t                    npix_z;
+    uint32_t                    nblk_x;
+    uint32_t                    nblk_y;
+    uint32_t                    nblk_z;
+    uint32_t                    pitch_bytes;
+    uint32_t                    mode;
+    uint64_t                    dcc_offset;
+    uint64_t                    dcc_fast_clear_size;
+    bool                        dcc_enabled;
+};
+
+
+/* surface defintions from the winsys */
+struct radeon_surf {
+    /* These are inputs to the calculator. */
+    uint32_t                    npix_x;
+    uint32_t                    npix_y;
+    uint32_t                    npix_z;
+    uint32_t                    blk_w;
+    uint32_t                    blk_h;
+    uint32_t                    blk_d;
+    uint32_t                    array_size;
+    uint32_t                    last_level;
+    uint32_t                    bpe;
+    uint32_t                    nsamples;
+    uint32_t                    flags;
+
+    /* These are return values. Some of them can be set by the caller, but
+     * they will be treated as hints (e.g. bankw, bankh) and might be
+     * changed by the calculator.
+     */
+    uint64_t                    bo_size;
+    uint64_t                    bo_alignment;
+    /* This applies to EG and later. */
+    uint32_t                    bankw;
+    uint32_t                    bankh;
+    uint32_t                    mtilea;
+    uint32_t                    tile_split;
+    uint32_t                    stencil_tile_split;
+    uint64_t                    stencil_offset;
+    struct radeon_surf_level    level[RADEON_SURF_MAX_LEVEL];
+    struct radeon_surf_level    stencil_level[RADEON_SURF_MAX_LEVEL];
+    uint32_t                    tiling_index[RADEON_SURF_MAX_LEVEL];
+    uint32_t                    stencil_tiling_index[RADEON_SURF_MAX_LEVEL];
+    uint32_t                    pipe_config;
+    uint32_t                    num_banks;
+    uint32_t                    macro_tile_index;
+    uint32_t                    micro_tile_mode; /* displayable, thin, depth, rotated */
+
+    uint64_t                    dcc_size;
+    uint64_t                    dcc_alignment;
+};
+
+struct radeon_winsys_bo;
+struct radeon_winsys_fence;
+
+struct radeon_winsys {
+   void (*destroy)(struct radeon_winsys *ws);
+
+   void (*query_info)(struct radeon_winsys *ws,
+		      struct radeon_info *info);
+
+   struct radeon_winsys_bo *(*buffer_create)(struct radeon_winsys *ws,
+					     uint64_t size,
+					     unsigned alignment,
+					     enum radeon_bo_domain domain,
+					     enum radeon_bo_flag flags);
+
+   void (*buffer_destroy)(struct radeon_winsys_bo *bo);
+   void *(*buffer_map)(struct radeon_winsys_bo *bo);
+
+
+   void (*buffer_unmap)(struct radeon_winsys_bo *bo);
+
+   struct radeon_winsys_ctx *(*ctx_create)(struct radeon_winsys *ws);
+   void (*ctx_destroy)(struct radeon_winsys_ctx *ctx);
+
+   struct radeon_winsys_cs *(*cs_create)(struct radeon_winsys *ws,
+					 enum ring_type ring_type);
+
+   void (*cs_destroy)(struct radeon_winsys_cs *cs);
+
+   int (*cs_submit)(struct radeon_winsys_ctx *ctx,
+		    struct radeon_winsys_cs *cs,
+		    struct radeon_winsys_fence *fence);
+
+   void (*cs_add_buffer)(struct radeon_winsys_cs *cs,
+			 struct radeon_winsys_bo *bo,
+			 uint8_t priority);
+
+   int (*surface_init)(struct radeon_winsys *ws,
+		       struct radeon_surf *surf);
+
+   int (*surface_best)(struct radeon_winsys *ws,
+		       struct radeon_surf *surf);
+};
+
+static inline void radeon_emit(struct radeon_winsys_cs *cs, uint32_t value)
+{
+    cs->buf[cs->cdw++] = value;
+}
+
+static inline void radeon_emit_array(struct radeon_winsys_cs *cs,
+				     const uint32_t *values, unsigned count)
+{
+    memcpy(cs->buf + cs->cdw, values, count * 4);
+    cs->cdw += count;
+}
+

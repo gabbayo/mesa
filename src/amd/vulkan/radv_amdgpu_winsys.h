@@ -6,6 +6,7 @@
 #include <amdgpu.h>
 
 struct amdgpu_winsys {
+  struct radeon_winsys base;
   amdgpu_device_handle dev;
 
   struct radeon_info info;
@@ -16,6 +17,8 @@ struct amdgpu_winsys {
   unsigned family;
 };
 
-
-struct amdgpu_winsys *
-amdgpu_winsys_create(int fd);
+static inline struct amdgpu_winsys *
+amdgpu_winsys(struct radeon_winsys *base)
+{
+   return (struct amdgpu_winsys*)base;
+}

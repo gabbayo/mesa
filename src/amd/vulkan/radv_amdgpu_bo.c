@@ -6,21 +6,23 @@
 #include <amdgpu_drm.h>
 #include <inttypes.h>
 
-void amdgpu_bo_destroy(struct amdgpu_winsys_bo *bo)
+static void amdgpu_winsys_bo_destroy(struct radeon_winsys_bo *_bo)
 {
+   struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
    amdgpu_bo_va_op(bo->bo, 0, bo->size, bo->va, 0, AMDGPU_VA_OP_UNMAP);
    amdgpu_va_range_free(bo->va_handle);
    amdgpu_bo_free(bo->bo);
    FREE(bo);
 }
 
-struct amdgpu_winsys_bo *amdgpu_create_bo(struct amdgpu_winsys *ws,
-					  uint64_t size,
-					  unsigned alignment,
-					  unsigned usage,
-					  enum radeon_bo_domain initial_domain,
-					  unsigned flags)
+static struct radeon_winsys_bo *
+amdgpu_winsys_bo_create(struct radeon_winsys *_ws,
+			uint64_t size,
+			unsigned alignment,
+			enum radeon_bo_domain initial_domain,
+			unsigned flags)
 {
+   struct amdgpu_winsys *ws = amdgpu_winsys(_ws);
    struct amdgpu_winsys_bo *bo;
    struct amdgpu_bo_alloc_request request = {0};
    amdgpu_bo_handle buf_handle;
@@ -70,7 +72,7 @@ struct amdgpu_winsys_bo *amdgpu_create_bo(struct amdgpu_winsys *ws,
    bo->va_handle = va_handle;
    bo->initial_domain = initial_domain;
    bo->size = size;
-   return bo;
+   return (struct radeon_winsys_bo *)bo;
 error_va_map:   
    amdgpu_va_range_free(va_handle);
 
@@ -82,12 +84,29 @@ error_va_alloc:
    return NULL;
 }
 
-int amdgpu_bo_map(struct amdgpu_winsys_bo *bo, void **data)
+static void *
+amdgpu_winsys_bo_map(struct radeon_winsys_bo *_bo)
 {
-   return amdgpu_bo_cpu_map(bo->bo, data);
+   struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
+   int ret;
+   void *data;
+   ret = amdgpu_bo_cpu_map(bo->bo, &data);
+   if (ret)
+      return NULL;
+   return data;
 }
 
-void amdgpu_bo_unmap(struct amdgpu_winsys_bo *bo)
+static void
+amdgpu_winsys_bo_unmap(struct radeon_winsys_bo *_bo)
 {
+   struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
    amdgpu_bo_cpu_unmap(bo->bo);
+}
+
+void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws)
+{
+   ws->base.buffer_create = amdgpu_winsys_bo_create;
+   ws->base.buffer_destroy = amdgpu_winsys_bo_destroy;
+   ws->base.buffer_map = amdgpu_winsys_bo_map;
+   ws->base.buffer_unmap = amdgpu_winsys_bo_unmap;
 }

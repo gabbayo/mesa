@@ -46,9 +46,7 @@
 #include "util/macros.h"
 #include "util/list.h"
 #include "main/macros.h"
-#include "radv_amdgpu_surface.h"
-#include "radv_amdgpu_bo.h"
-#include "radv_amdgpu_winsys.h"
+#include "radv_radeon_winsys.h"
 
 /* Pre-declarations needed for WSI entrypoints */
 struct wl_surface;
@@ -283,7 +281,7 @@ radv_vector_finish(struct radv_vector *queue)
 
 
 struct radv_bo {
-   struct amdgpu_winsys_bo *bo;
+   struct radeon_winsys_bo *bo;
 };
 
 #if 0
@@ -527,7 +525,8 @@ struct radv_physical_device {
 
    struct radv_instance *                       instance;
 
-   struct amdgpu_winsys *ws;
+   struct radeon_winsys *ws;
+   struct radeon_info rad_info;
    uint32_t                                    chipset_id;
    char                                        path[20];
    const char *                                name;
@@ -627,7 +626,7 @@ struct radv_queue {
 
     struct radv_state_pool *                     pool;
 
-    amdgpu_context_handle                        hw_ctx;
+   struct radeon_winsys_ctx *hw_ctx;
 };
 
 struct radv_pipeline_cache {
@@ -667,7 +666,7 @@ struct radv_device {
 
     struct radv_instance *                       instance;
     uint32_t                                    chipset_id;
-    struct amdgpu_winsys *ws;
+    struct radeon_winsys *ws;
 #if 0
     struct brw_device_info                      info;
     struct isl_device                           isl_dev;
@@ -1270,8 +1269,13 @@ struct radv_cmd_buffer {
    struct radeon_winsys_cs *cs;
 };
 
-void si_init_config(struct amdgpu_winsys *ws,
+void si_init_config(struct radv_physical_device *physical_device,
 		    struct radeon_winsys_cs *cs);
+void si_write_viewport(struct radeon_winsys_cs *cs, int first_vp,
+		       int count, const VkViewport *viewports);
+void si_write_scissors(struct radeon_winsys_cs *cs, int first,
+		       int count, const VkRect2D *scissors);
+
 #if 0
 VkResult anv_cmd_buffer_init_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
 void anv_cmd_buffer_fini_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);

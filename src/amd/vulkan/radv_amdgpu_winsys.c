@@ -1,5 +1,6 @@
 
 #include "radv_amdgpu_winsys.h"
+#include "radv_amdgpu_winsys_public.h"
 #include "radv_amdgpu_surface.h"
 #include "amdgpu_id.h"
 #include "xf86drm.h"
@@ -8,6 +9,9 @@
 #include <string.h>
 #include <amdgpu_drm.h>
 #include <assert.h>
+#include "radv_amdgpu_cs.h"
+#include "radv_amdgpu_bo.h"
+#include "radv_amdgpu_surface.h"
 #define CIK_TILE_MODE_COLOR_2D			14
 
 #define CIK__GB_TILE_MODE__PIPE_CONFIG(x)        (((x) >> 6) & 0x1f)
@@ -225,7 +229,13 @@ fail:
    return false;
 }
 
-struct amdgpu_winsys *
+static void amdgpu_winsys_query_info(struct radeon_winsys *rws,
+                                     struct radeon_info *info)
+{
+   *info = ((struct amdgpu_winsys *)rws)->info;
+}
+
+struct radeon_winsys *
 amdgpu_winsys_create(int fd)
 {
    uint32_t drm_major, drm_minor, r;
@@ -246,7 +256,12 @@ amdgpu_winsys_create(int fd)
    ws->info.drm_minor = drm_minor;
    if (!do_winsys_init(ws, fd))
       goto fail;
-   return ws;
+
+   ws->base.query_info = amdgpu_winsys_query_info;
+   radv_amdgpu_bo_init_functions(ws);
+   radv_amdgpu_cs_init_functions(ws);
+   radv_amdgpu_surface_init_functions(ws);
+   return &ws->base;
  fail:
    return NULL;
 }

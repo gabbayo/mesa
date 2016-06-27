@@ -1,5 +1,5 @@
 #include "radv_private.h"
-#include "radv_amdgpu_cs.h"
+
 static VkResult radv_create_cmd_buffer(
     struct radv_device *                         device,
     struct radv_cmd_pool *                       pool,
@@ -28,7 +28,7 @@ static VkResult radv_create_cmd_buffer(
       list_inithead(&cmd_buffer->pool_link);
    }
 
-   cmd_buffer->cs = radv_amdgpu_cs_create(device->ws);
+   cmd_buffer->cs = device->ws->cs_create(device->ws, RING_GFX);
    *pCommandBuffer = radv_cmd_buffer_to_handle(cmd_buffer);
 
    return VK_SUCCESS;
@@ -69,7 +69,7 @@ radv_cmd_buffer_destroy(struct radv_cmd_buffer *cmd_buffer)
 {
    list_del(&cmd_buffer->pool_link);
 
-   radv_amdgpu_cs_destroy(cmd_buffer->cs);
+   cmd_buffer->device->ws->cs_destroy(cmd_buffer->cs);
    radv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 }
 
@@ -101,7 +101,7 @@ VkResult radv_BeginCommandBuffer(
    RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
    /* setup initial configuration into command buffer */
-   si_init_config(cmd_buffer->device->ws, cmd_buffer->cs);
+   si_init_config(&cmd_buffer->device->instance->physicalDevice, cmd_buffer->cs);
    return VK_SUCCESS;
 }
 
@@ -155,8 +155,8 @@ void radv_CmdSetViewport(
     uint32_t                                    viewportCount,
     const VkViewport*                           pViewports)
 {
-  // RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-
+  RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  si_write_viewport(cmd_buffer->cs, firstViewport, viewportCount, pViewports);
 }
 
 void radv_CmdSetScissor(

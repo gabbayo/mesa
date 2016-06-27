@@ -1,7 +1,7 @@
 /* command buffer handling for SI */
 
 #include "radv_private.h"
-#include "radv_amdgpu_cs.h"
+#include "radv_cs.h"
 #include "sid.h"
 #include "radv_util.h"
 #include "main/macros.h"
@@ -9,15 +9,15 @@
 #define SI_GS_PER_ES 128
 
 static void
-si_write_harvested_raster_configs(struct amdgpu_winsys *ws,
+si_write_harvested_raster_configs(struct radv_physical_device *physical_device,
                                   struct radeon_winsys_cs *cs,
 				  unsigned raster_config,
 				  unsigned raster_config_1)
 {
-	unsigned sh_per_se = MAX2(ws->info.max_sh_per_se, 1);
-	unsigned num_se = MAX2(ws->info.max_se, 1);
-	unsigned rb_mask = ws->info.enabled_rb_mask;
-	unsigned num_rb = MIN2(ws->info.num_render_backends, 16);
+	unsigned sh_per_se = MAX2(physical_device->rad_info.max_sh_per_se, 1);
+	unsigned num_se = MAX2(physical_device->rad_info.max_se, 1);
+	unsigned rb_mask = physical_device->rad_info.enabled_rb_mask;
+	unsigned num_rb = MIN2(physical_device->rad_info.num_render_backends, 16);
 	unsigned rb_per_pkr = MIN2(num_rb / num_se / sh_per_se, 2);
 	unsigned rb_per_se = num_rb / num_se;
 	unsigned se_mask[4];
@@ -119,7 +119,7 @@ si_write_harvested_raster_configs(struct amdgpu_winsys *ws,
 		}
 
 		/* GRBM_GFX_INDEX has a different offset on SI and CI+ */
-		if (ws->info.chip_class < CIK)
+		if (physical_device->rad_info.chip_class < CIK)
 			radeon_set_config_reg(cs, GRBM_GFX_INDEX,
 				       SE_INDEX(se) | SH_BROADCAST_WRITES |
 				       INSTANCE_BROADCAST_WRITES);
@@ -128,12 +128,12 @@ si_write_harvested_raster_configs(struct amdgpu_winsys *ws,
 				       S_030800_SE_INDEX(se) | S_030800_SH_BROADCAST_WRITES(1) |
 				       S_030800_INSTANCE_BROADCAST_WRITES(1));
 		radeon_set_context_reg(cs, R_028350_PA_SC_RASTER_CONFIG, raster_config_se);
-		if (ws->info.chip_class >= CIK)
+		if (physical_device->rad_info.chip_class >= CIK)
                    radeon_set_context_reg(cs, R_028354_PA_SC_RASTER_CONFIG_1, raster_config_1);
 	}
 
 	/* GRBM_GFX_INDEX has a different offset on SI and CI+ */
-	if (ws->info.chip_class < CIK)
+	if (physical_device->rad_info.chip_class < CIK)
            radeon_set_config_reg(cs, GRBM_GFX_INDEX,
 			       SE_BROADCAST_WRITES | SH_BROADCAST_WRITES |
 			       INSTANCE_BROADCAST_WRITES);
@@ -143,11 +143,11 @@ si_write_harvested_raster_configs(struct amdgpu_winsys *ws,
 			       S_030800_INSTANCE_BROADCAST_WRITES(1));
 }
 
-void si_init_config(struct amdgpu_winsys *ws,
+void si_init_config(struct radv_physical_device *physical_device,
 		    struct radeon_winsys_cs *cs)
 {
-   unsigned num_rb = MIN2(ws->info.num_render_backends, 16);
-   unsigned rb_mask = ws->info.enabled_rb_mask;
+   unsigned num_rb = MIN2(physical_device->rad_info.num_render_backends, 16);
+   unsigned rb_mask = physical_device->rad_info.enabled_rb_mask;
    unsigned raster_config, raster_config_1;
    int i;
 
@@ -168,7 +168,7 @@ void si_init_config(struct amdgpu_winsys *ws,
 
    radeon_set_context_reg(cs, R_028B98_VGT_STRMOUT_BUFFER_CONFIG, 0x0);
    radeon_set_context_reg(cs, R_028AB8_VGT_VTX_CNT_EN, 0x0);
-   if (ws->info.chip_class < CIK)
+   if (physical_device->rad_info.chip_class < CIK)
       radeon_set_config_reg(cs, R_008A14_PA_CL_ENHANCE, S_008A14_NUM_CLIP_SEQ(3) |
                      S_008A14_CLIP_VTX_REORDER_ENA(1));
 
@@ -182,7 +182,7 @@ void si_init_config(struct amdgpu_winsys *ws,
       radeon_set_context_reg(cs, R_0282D4_PA_SC_VPORT_ZMAX_0 + i*8, fui(1.0));
    }
 
-   switch (ws->info.family) {
+   switch (physical_device->rad_info.family) {
    case CHIP_TAHITI:
    case CHIP_PITCAIRN:
       raster_config = 0x2a00126a;
@@ -209,7 +209,7 @@ void si_init_config(struct amdgpu_winsys *ws,
       raster_config_1 = 0x0000002e;
       break;
    case CHIP_FIJI:
-      if (ws->info.cik_macrotile_mode_array[0] == 0x000000e8) {
+      if (physical_device->rad_info.cik_macrotile_mode_array[0] == 0x000000e8) {
          /* old kernels with old tiling config */
          raster_config = 0x16000012;
          raster_config_1 = 0x0000002a;
@@ -266,11 +266,11 @@ void si_init_config(struct amdgpu_winsys *ws,
    if (!rb_mask || util_bitcount(rb_mask) >= num_rb) {
       radeon_set_context_reg(cs, R_028350_PA_SC_RASTER_CONFIG,
                      raster_config);
-      if (ws->info.chip_class >= CIK)
+      if (physical_device->rad_info.chip_class >= CIK)
          radeon_set_context_reg(cs, R_028354_PA_SC_RASTER_CONFIG_1,
                         raster_config_1);
    } else {
-      si_write_harvested_raster_configs(ws, cs, raster_config, raster_config_1);
+      si_write_harvested_raster_configs(physical_device, cs, raster_config, raster_config_1);
    }
 
    radeon_set_context_reg(cs, R_028204_PA_SC_WINDOW_SCISSOR_TL, S_028204_WINDOW_OFFSET_DISABLE(1));
@@ -297,13 +297,13 @@ void si_init_config(struct amdgpu_winsys *ws,
    radeon_set_context_reg(cs, R_028404_VGT_MIN_VTX_INDX, 0);
    radeon_set_context_reg(cs, R_028408_VGT_INDX_OFFSET, 0);
 
-   if (ws->info.chip_class >= CIK) {
+   if (physical_device->rad_info.chip_class >= CIK) {
       radeon_set_sh_reg(cs, R_00B41C_SPI_SHADER_PGM_RSRC3_HS, 0);
       radeon_set_sh_reg(cs, R_00B31C_SPI_SHADER_PGM_RSRC3_ES, S_00B31C_CU_EN(0xffff));
       radeon_set_sh_reg(cs, R_00B21C_SPI_SHADER_PGM_RSRC3_GS, S_00B21C_CU_EN(0xffff));
 
-      if (ws->info.num_good_compute_units /
-          (ws->info.max_se * ws->info.max_sh_per_se) <= 4) {
+      if (physical_device->rad_info.num_good_compute_units /
+          (physical_device->rad_info.max_se * physical_device->rad_info.max_sh_per_se) <= 4) {
          /* Too few available compute units per SH. Disallowing
           * VS to run on CU0 could hurt us more than late VS
           * allocation would help.
@@ -327,7 +327,7 @@ void si_init_config(struct amdgpu_winsys *ws,
       radeon_set_sh_reg(cs, R_00B01C_SPI_SHADER_PGM_RSRC3_PS, S_00B01C_CU_EN(0xffff));
    }
 
-   if (ws->info.chip_class >= VI) {
+   if (physical_device->rad_info.chip_class >= VI) {
       radeon_set_context_reg(cs, R_028424_CB_DCC_CONTROL,
                      S_028424_OVERWRITE_COMBINER_MRT_SHARING_DISABLE(1) |
                      S_028424_OVERWRITE_COMBINER_WATERMARK(4));
@@ -340,7 +340,58 @@ void si_init_config(struct amdgpu_winsys *ws,
                      S_028B50_DONUT_SPLIT(16));
    }
 
-   if (ws->info.family == CHIP_STONEY)
+   if (physical_device->rad_info.family == CHIP_STONEY)
       radeon_set_context_reg(cs, R_028C40_PA_SC_SHADER_CONTROL, 0);
+
+}
+
+static void
+get_viewport_xform(const VkViewport *viewport,
+                   float scale[3], float translate[3])
+{
+   float x = viewport->x;
+   float y = viewport->y;
+   float half_width = 0.5f * viewport->width;
+   float half_height = 0.5f * viewport->height;
+   double n = viewport->minDepth;
+   double f = viewport->maxDepth;
+
+   scale[0] = half_width;
+   translate[0] = half_width + x;
+   scale[1] = half_height;
+   translate[1] = half_height + y;
+
+   scale[2] = (f - n);
+   translate[2] = n;
+}
+
+void
+si_write_viewport(struct radeon_winsys_cs *cs, int first_vp,
+                  int count, const VkViewport *viewports)
+{
+   int i;
+
+   radeon_set_context_reg_seq(cs, R_02843C_PA_CL_VPORT_XSCALE +
+                              first_vp * 4 * 6, count * 6);
+
+   for (i = 0; i < count; i++) {
+      float scale[3], translate[3];
+
+
+      get_viewport_xform(&viewports[i], scale, translate);
+      radeon_emit(cs, fui(scale[0]));
+      radeon_emit(cs, fui(translate[0]));
+      radeon_emit(cs, fui(scale[1]));
+      radeon_emit(cs, fui(translate[1]));
+      radeon_emit(cs, fui(scale[2]));
+      radeon_emit(cs, fui(translate[2]));
+   }
+}
+
+void
+si_write_scissors(struct radeon_winsys_cs *cs, int first,
+                  int count, const VkRect2D *scissors)
+{
+
 
 }

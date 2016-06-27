@@ -2,7 +2,8 @@
 #include "radv_private.h"
 #include "addrlib/addrinterface.h"
 #include "util/bitset.h"
-
+#include "radv_amdgpu_winsys.h"
+#include "radv_amdgpu_surface.h"
 #ifndef NO_ENTRIES
 #define NO_ENTRIES 32
 #endif
@@ -226,9 +227,10 @@ static int compute_level(ADDR_HANDLE addrlib,
    return 0;
 }
 
-int radv_amdgpu_surface_init(ADDR_HANDLE addrlib,
-			     struct radeon_surf *surf)
+static int amdgpu_winsys_surface_init(struct radeon_winsys *_ws,
+				      struct radeon_surf *surf)
 {
+   struct amdgpu_winsys *ws = amdgpu_winsys(_ws);
    unsigned level, mode, type;
    bool compressed;
    ADDR_COMPUTE_SURFACE_INFO_INPUT AddrSurfInfoIn = {0};
@@ -373,7 +375,7 @@ int radv_amdgpu_surface_init(ADDR_HANDLE addrlib,
 
    /* Calculate texture layout information. */
    for (level = 0; level <= surf->last_level; level++) {
-      r = compute_level(addrlib, surf, false, level, type, compressed,
+      r = compute_level(ws->addrlib, surf, false, level, type, compressed,
                         &AddrSurfInfoIn, &AddrSurfInfoOut, &AddrDccIn, &AddrDccOut);
       if (r)
          return r;
@@ -405,7 +407,7 @@ int radv_amdgpu_surface_init(ADDR_HANDLE addrlib,
       AddrTileInfoIn.tileSplitBytes = surf->stencil_tile_split;
 
       for (level = 0; level <= surf->last_level; level++) {
-         r = compute_level(addrlib, surf, true, level, type, compressed,
+         r = compute_level(ws->addrlib, surf, true, level, type, compressed,
                            &AddrSurfInfoIn, &AddrSurfInfoOut, &AddrDccIn, &AddrDccOut);
          if (r)
             return r;
@@ -436,3 +438,14 @@ int radv_amdgpu_surface_init(ADDR_HANDLE addrlib,
    return 0;
 }
 
+static int amdgpu_winsys_surface_best(struct radeon_winsys *rws,
+				      struct radeon_surf *surf)
+{
+   return 0;
+}
+
+void radv_amdgpu_surface_init_functions(struct amdgpu_winsys *ws)
+{
+   ws->base.surface_init = amdgpu_winsys_surface_init;
+   ws->base.surface_best = amdgpu_winsys_surface_best;
+}
