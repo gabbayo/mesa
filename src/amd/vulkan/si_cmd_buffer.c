@@ -143,6 +143,46 @@ si_write_harvested_raster_configs(struct radv_physical_device *physical_device,
 			       S_030800_INSTANCE_BROADCAST_WRITES(1));
 }
 
+static void
+si_init_compute(struct radv_physical_device *physical_device,
+                struct radeon_winsys_cs *cs)
+{
+	radeon_set_sh_reg_seq(cs, R_00B810_COMPUTE_START_X, 3);
+	radeon_emit(cs, 0);
+	radeon_emit(cs, 0);
+	radeon_emit(cs, 0);
+
+	radeon_set_sh_reg_seq(cs, R_00B854_COMPUTE_RESOURCE_LIMITS, 3);
+	radeon_emit(cs, 0);
+	/* R_00B858_COMPUTE_STATIC_THREAD_MGMT_SE0 / SE1 */
+	radeon_emit(cs, S_00B858_SH0_CU_EN(0xffff) | S_00B858_SH1_CU_EN(0xffff));
+	radeon_emit(cs, S_00B85C_SH0_CU_EN(0xffff) | S_00B85C_SH1_CU_EN(0xffff));
+
+	if (physical_device->rad_info.chip_class >= CIK) {
+		/* Also set R_00B858_COMPUTE_STATIC_THREAD_MGMT_SE2 / SE3 */
+		radeon_set_sh_reg_seq(cs,
+		                     R_00B864_COMPUTE_STATIC_THREAD_MGMT_SE2, 2);
+		radeon_emit(cs, S_00B864_SH0_CU_EN(0xffff) |
+		                S_00B864_SH1_CU_EN(0xffff));
+		radeon_emit(cs, S_00B868_SH0_CU_EN(0xffff) |
+		                S_00B868_SH1_CU_EN(0xffff));
+	}
+
+	/* This register has been moved to R_00CD20_COMPUTE_MAX_WAVE_ID
+	 * and is now per pipe, so it should be handled in the
+	 * kernel if we want to use something other than the default value,
+	 * which is now 0x22f.
+	 */
+	if (physical_device->rad_info.chip_class <= SI) {
+		/* XXX: This should be:
+		 * (number of compute units) * 4 * (waves per simd) - 1 */
+
+		radeon_set_sh_reg(cs, R_00B82C_COMPUTE_MAX_WAVE_ID,
+		                  0x190 /* Default value */);
+	}
+}
+
+
 void si_init_config(struct radv_physical_device *physical_device,
 		    struct radeon_winsys_cs *cs)
 {
@@ -343,6 +383,7 @@ void si_init_config(struct radv_physical_device *physical_device,
    if (physical_device->rad_info.family == CHIP_STONEY)
       radeon_set_context_reg(cs, R_028C40_PA_SC_SHADER_CONTROL, 0);
 
+   si_init_compute(physical_device, cs);
 }
 
 static void
