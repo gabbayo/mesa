@@ -24,8 +24,7 @@
  *
  */
 
-#ifndef AC_BINARY_H
-#define AC_BINARY_H
+#pragma once
 
 #include <stdint.h>
 
@@ -79,5 +78,3 @@ void ac_elf_read(const char *elf_data, unsigned elf_size,
 const unsigned char *ac_shader_binary_config_start(
 	const struct ac_shader_binary *binary,
 	uint64_t symbol_offset);
-
-#endif /* AC_BINARY_H */
