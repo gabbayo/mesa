@@ -96,6 +96,7 @@ SUBDIRS += intel/vulkan
 endif
 
 if HAVE_RADEON_VULKAN
+SUBDIRS += amd/common
 SUBDIRS += amd/vulkan
 endif
 

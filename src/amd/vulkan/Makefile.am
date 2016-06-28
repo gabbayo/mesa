@@ -45,6 +45,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/include \
 	-I$(top_builddir)/src \
 	-I$(top_srcdir)/src \
+	-I$(top_srcdir)/src/amd/common \
 	-I$(top_builddir)/src/compiler \
 	-I$(top_builddir)/src/compiler/nir \
 	-I$(top_srcdir)/src/compiler \
@@ -103,10 +104,12 @@ libvulkan_common_la_SOURCES = $(VULKAN_SOURCES)
 
 VULKAN_LIB_DEPS += \
 	libvulkan_common.la \
+	$(top_builddir)/src/amd/common/libamd_common.la \
 	$(top_builddir)/src/compiler/nir/libnir.la \
 	$(top_builddir)/src/util/libmesautil.la \
 	$(PER_GEN_LIBS) \
 	$(LLVM_LIBS) \
+	$(LIBELF_LIBS) \
 	$(PTHREAD_LIBS) \
 	$(LIBDRM_LIBS) \
 	$(PTHREAD_LIBS) \

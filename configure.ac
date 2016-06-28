@@ -2631,6 +2631,7 @@ CXXFLAGS="$CXXFLAGS $USER_CXXFLAGS"
 dnl Substitute the config
 AC_CONFIG_FILES([Makefile
 		src/Makefile
+		src/amd/common/Makefile
 		src/amd/vulkan/Makefile
 		src/compiler/Makefile
 		src/egl/Makefile
