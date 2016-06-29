@@ -9,6 +9,7 @@
 #include <amdgpu_drm.h>
 #include "amdgpu_id.h"
 #include "winsys/amdgpu/radv_amdgpu_winsys_public.h"
+#include "ac_llvm_util.h"
 struct radv_dispatch_table dtable;
 
 
@@ -532,6 +533,7 @@ VkResult radv_CreateDevice(
     VkDevice*                                   pDevice)
 {
    RADV_FROM_HANDLE(radv_physical_device, physical_device, physicalDevice);
+   enum radeon_family chip_family = physical_device->instance->physicalDevice.rad_info.family;
    VkResult result;
    struct radv_device *device;
 
@@ -563,6 +565,7 @@ VkResult radv_CreateDevice(
    else
       device->alloc = physical_device->instance->alloc;
 
+   device->target_machine = ac_create_target_machine(chip_family);
    radv_queue_init(device, &device->queue);
    *pDevice = radv_device_to_handle(device);
    return VK_SUCCESS;
@@ -575,6 +578,7 @@ void radv_DestroyDevice(
 {
    RADV_FROM_HANDLE(radv_device, device, _device);
 
+   LLVMDisposeTargetMachine(device->target_machine);
    radv_queue_finish(&device->queue);
    radv_free(&device->alloc, device);
 }

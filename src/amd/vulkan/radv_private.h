@@ -48,6 +48,8 @@
 #include "main/macros.h"
 #include "radv_radeon_winsys.h"
 
+#include <llvm-c/TargetMachine.h>
+
 /* Pre-declarations needed for WSI entrypoints */
 struct wl_surface;
 struct wl_display;
@@ -667,6 +669,7 @@ struct radv_device {
     struct radv_instance *                       instance;
     uint32_t                                    chipset_id;
     struct radeon_winsys *ws;
+    LLVMTargetMachineRef target_machine;
 #if 0
     struct brw_device_info                      info;
     struct isl_device                           isl_dev;

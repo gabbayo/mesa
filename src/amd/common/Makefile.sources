@@ -20,4 +20,5 @@
 # IN THE SOFTWARE.
 
 AMD_COMPILER_SOURCES := \
-	ac_binary.c
+	ac_binary.c \
+	ac_llvm_util.c
