@@ -21,4 +21,5 @@
 
 AMD_COMPILER_SOURCES := \
 	ac_binary.c \
-	ac_llvm_util.c
+	ac_llvm_util.c \
+	ac_nir_to_llvm.c
