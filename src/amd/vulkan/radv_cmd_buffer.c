@@ -1,4 +1,7 @@
 #include "radv_private.h"
+#include "radv_radeon_winsys.h"
+#include "radv_cs.h"
+#include "sid.h"
 
 static VkResult radv_create_cmd_buffer(
     struct radv_device *                         device,
@@ -139,13 +142,48 @@ VkResult radv_EndCommandBuffer(
    return VK_SUCCESS;
 }
 
+static void
+radv_bind_compute_pipeline(struct radv_cmd_buffer *cmd_buffer,
+                           struct radv_pipeline *pipeline)
+{
+   struct radeon_winsys *ws = cmd_buffer->device->ws;
+   struct radv_shader_variant *compute_shader = pipeline->shaders[MESA_SHADER_COMPUTE];
+   uint64_t va = ws->buffer_get_va(compute_shader->bo);
+
+   ws->cs_add_buffer(cmd_buffer->cs, compute_shader->bo, 8);
+
+   radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B830_COMPUTE_PGM_LO, 2);
+   radeon_emit(cmd_buffer->cs, va >> 8);
+   radeon_emit(cmd_buffer->cs, va >> 40);
+
+   radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B848_COMPUTE_PGM_RSRC1, 2);
+   radeon_emit(cmd_buffer->cs, compute_shader->rsrc1);
+   radeon_emit(cmd_buffer->cs, compute_shader->rsrc2);
+
+   /* change these once we have scratch support */
+   radeon_set_sh_reg(cmd_buffer->cs, R_00B860_COMPUTE_TMPRING_SIZE,
+                     S_00B860_WAVES(32) | S_00B860_WAVESIZE(0));
+
+   radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B81C_COMPUTE_NUM_THREAD_X, 3);
+   radeon_emit(cmd_buffer->cs,
+               S_00B81C_NUM_THREAD_FULL(pipeline->compute.block_size[0]));
+   radeon_emit(cmd_buffer->cs,
+               S_00B81C_NUM_THREAD_FULL(pipeline->compute.block_size[1]));
+   radeon_emit(cmd_buffer->cs,
+               S_00B81C_NUM_THREAD_FULL(pipeline->compute.block_size[2]));
+}
+
 void radv_CmdBindPipeline(
     VkCommandBuffer                             commandBuffer,
     VkPipelineBindPoint                         pipelineBindPoint,
     VkPipeline                                  _pipeline)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-  //   RADV_FROM_HANDLE(radv_pipeline, pipeline, _pipeline);
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+   RADV_FROM_HANDLE(radv_pipeline, pipeline, _pipeline);
+
+   if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+	   radv_bind_compute_pipeline(cmd_buffer, pipeline);
+   }
 
 }
 
@@ -288,6 +326,22 @@ void radv_CmdDraw(
     uint32_t                                    firstInstance)
 {
   //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+}
+
+void radv_CmdDispatch(
+    VkCommandBuffer                             commandBuffer,
+    uint32_t                                    x,
+    uint32_t                                    y,
+    uint32_t                                    z)
+{
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+   radeon_emit(cmd_buffer->cs, PKT3(PKT3_DISPATCH_DIRECT, 3, 0) |
+                   PKT3_SHADER_TYPE_S(1));
+   radeon_emit(cmd_buffer->cs, x);
+   radeon_emit(cmd_buffer->cs, y);
+   radeon_emit(cmd_buffer->cs, z);
+   radeon_emit(cmd_buffer->cs, 1);
 }
 
 void radv_CmdEndRenderPass(

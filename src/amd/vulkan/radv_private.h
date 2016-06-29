@@ -47,6 +47,7 @@
 #include "util/list.h"
 #include "main/macros.h"
 #include "radv_radeon_winsys.h"
+#include "ac_binary.h"
 
 #include <llvm-c/TargetMachine.h>
 
@@ -1400,6 +1401,14 @@ struct anv_pipeline_bind_map {
    uint32_t *                                   surface_to_attachment;
 };
 #endif
+
+struct radv_shader_variant {
+   struct radeon_winsys_bo *bo;
+   struct ac_shader_config config;
+   unsigned rsrc1;
+   unsigned rsrc2;
+};
+
 struct radv_pipeline {
    struct radv_device *                          device;
    uint32_t                                     dynamic_state_mask;
@@ -1410,7 +1419,14 @@ struct radv_pipeline {
    bool                                         use_repclear;
    bool                                         needs_data_cache;
 
+   struct radv_shader_variant *                 shaders[MESA_SHADER_STAGES];
    VkShaderStageFlags                           active_stages;
+
+   union {
+      struct {
+         int block_size[3];
+      } compute;
+   };
 };
 #if 0
 static inline const struct brw_vs_prog_data *
