@@ -27,7 +27,13 @@
 #include "nir/nir.h"
 
 struct nir_to_llvm_context {
+	LLVMContextRef context;
+	LLVMModuleRef module;
 	LLVMBuilderRef builder;
+
+	LLVMTypeRef i1;
+	LLVMTypeRef i32;
+	LLVMTypeRef f32;
 };
 
 static void ac_llvm_create_func(LLVMContextRef ctx, LLVMModuleRef module,
@@ -52,23 +58,30 @@ static void ac_llvm_create_func(LLVMContextRef ctx, LLVMModuleRef module,
 	LLVMPositionBuilderAtEnd(builder, main_fn_body);
 }
 
+static void setup_types(struct nir_to_llvm_context *ctx)
+{
+	ctx->i1 = LLVMIntTypeInContext(ctx->context, 1);
+	ctx->i32 = LLVMIntTypeInContext(ctx->context, 32);
+	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
+}
+
 LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
                                        struct nir_shader *nir)
 {
 	struct nir_to_llvm_context ctx = {};
-	LLVMContextRef llvm_ctx = LLVMContextCreate();
-	LLVMModuleRef module =
-	    LLVMModuleCreateWithNameInContext("shader", llvm_ctx);
+	ctx.context = LLVMContextCreate();
+	ctx.module = LLVMModuleCreateWithNameInContext("shader", ctx.context);
+	setup_types(&ctx);
 
-	ctx.builder = LLVMCreateBuilderInContext(llvm_ctx);
-	LLVMTypeRef float_type = LLVMFloatTypeInContext(llvm_ctx);
-	LLVMTypeRef args[] = {float_type, float_type};
-	ac_llvm_create_func(llvm_ctx, module, ctx.builder, NULL, 0, args, 2);
+	ctx.builder = LLVMCreateBuilderInContext(ctx.context);
+	LLVMTypeRef args[] = {ctx.f32, ctx.f32};
+	ac_llvm_create_func(ctx.context, ctx.module, ctx.builder, NULL, 0, args,
+	                    2);
 
 	LLVMBuildRetVoid(ctx.builder);
 	LLVMDisposeBuilder(ctx.builder);
 
-	return module;
+	return ctx.module;
 }
 
 static void ac_diagnostic_handler(LLVMDiagnosticInfoRef di, void *context)
