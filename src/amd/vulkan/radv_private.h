@@ -926,28 +926,19 @@ struct anv_vue_header {
 #endif
 
 struct radv_descriptor_set_binding_layout {
+   VkDescriptorType type;
+
    /* Number of array elements in this binding */
    uint16_t array_size;
 
-   /* Index into the flattend descriptor set */
-   uint16_t descriptor_index;
+   uint16_t offset;
+   uint16_t buffer_offset;
+   uint16_t dynamic_offset_offset;
 
-   /* Index into the dynamic state array for a dynamic buffer */
-   int16_t dynamic_offset_index;
-
-   /* Index into the descriptor set buffer views */
-   int16_t buffer_index;
-
-   struct {
-      /* Index into the binding table for the associated surface */
-      int16_t surface_index;
-
-      /* Index into the sampler table for the associated sampler */
-      int16_t sampler_index;
-
-      /* Index into the image table for the associated image */
-      int16_t image_index;
-   } stage[MESA_SHADER_STAGES];
+   /* redundant with the type, each for a single array element */
+   uint16_t size;
+   uint16_t buffer_count;
+   uint16_t dynamic_offset_count;
 
    /* Immutable samplers (or NULL if no immutable samplers) */
    struct radv_sampler **immutable_samplers;

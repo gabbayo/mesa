@@ -42,19 +42,8 @@ VkResult radv_CreateDescriptorSetLayout(
    set_layout->shader_stages = 0;
    set_layout->size = 0;
 
-   for (uint32_t b = 0; b <= max_binding; b++) {
-      /* Initialize all binding_layout entries to -1 */
-      memset(&set_layout->binding[b], -1, sizeof(set_layout->binding[b]));
+   memset(set_layout->binding, 0, size);
 
-      set_layout->binding[b].immutable_samplers = NULL;
-   }
-
-   /* Initialize all samplers to 0 */
-   memset(samplers, 0, immutable_sampler_count * sizeof(*samplers));
-
-   uint32_t sampler_count[MESA_SHADER_STAGES] = { 0, };
-   uint32_t surface_count[MESA_SHADER_STAGES] = { 0, };
-   uint32_t image_count[MESA_SHADER_STAGES] = { 0, };
    uint32_t buffer_count = 0;
    uint32_t dynamic_offset_count = 0;
 
@@ -63,67 +52,44 @@ VkResult radv_CreateDescriptorSetLayout(
       uint32_t b = binding->binding;
 
       assert(binding->descriptorCount > 0);
+      set_layout->binding[b].type = binding->descriptorType;
       set_layout->binding[b].array_size = binding->descriptorCount;
-      set_layout->binding[b].descriptor_index = set_layout->size;
-      set_layout->size += binding->descriptorCount;
+      set_layout->binding[b].offset = set_layout->size;
+      set_layout->binding[b].buffer_offset = buffer_count;
+      set_layout->binding[b].dynamic_offset_offset = dynamic_offset_count;
 
       switch (binding->descriptorType) {
-      case VK_DESCRIPTOR_TYPE_SAMPLER:
-      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-         radv_foreach_stage(s, binding->stageFlags) {
-            set_layout->binding[b].stage[s].sampler_index = sampler_count[s];
-            sampler_count[s] += binding->descriptorCount;
-         }
-         break;
-      default:
-         break;
-      }
-
-      switch (binding->descriptorType) {
+      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+         set_layout->binding[b].dynamic_offset_count = 1;
+         /* fall through */
       case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
       case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-         set_layout->binding[b].buffer_index = buffer_count;
-         buffer_count += binding->descriptorCount;
-         /* fall through */
-
-      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-      case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-      case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
       case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
       case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-      case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-         radv_foreach_stage(s, binding->stageFlags) {
-            set_layout->binding[b].stage[s].surface_index = surface_count[s];
-            surface_count[s] += binding->descriptorCount;
-         }
+         set_layout->binding[b].size = 16;
+         set_layout->binding[b].buffer_count = 1;
          break;
-      default:
-         break;
-      }
-
-      switch (binding->descriptorType) {
-      case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-      case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-         set_layout->binding[b].dynamic_offset_index = dynamic_offset_count;
-         dynamic_offset_count += binding->descriptorCount;
-         break;
-      default:
-         break;
-      }
-
-      switch (binding->descriptorType) {
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-      case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-         radv_foreach_stage(s, binding->stageFlags) {
-            set_layout->binding[b].stage[s].image_index = image_count[s];
-            image_count[s] += binding->descriptorCount;
-         }
+      case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+         /* main descriptor + fmask descriptor */
+         set_layout->binding[b].size = 64;
+         set_layout->binding[b].buffer_count = 1;
+         break;
+      case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+         /* main descriptor + fmask descriptor + sampler */
+         set_layout->binding[b].size = 80;
+         set_layout->binding[b].buffer_count = 1;
          break;
       default:
          break;
       }
+
+      set_layout->size += binding->descriptorCount * set_layout->binding[b].size;
+      buffer_count += binding->descriptorCount * set_layout->binding[b].buffer_count;
+      dynamic_offset_count += binding->descriptorCount *
+                                 set_layout->binding[b].dynamic_offset_count;
+
 
       if (binding->pImmutableSamplers) {
          set_layout->binding[b].immutable_samplers = samplers;
@@ -196,8 +162,6 @@ VkResult radv_CreatePipelineLayout(
 
          dynamic_offset_count += set_layout->binding[b].array_size;
          for (gl_shader_stage s = 0; s < MESA_SHADER_STAGES; s++) {
-            if (set_layout->binding[b].stage[s].surface_index >= 0)
-               layout->stage[s].has_dynamic_offsets = true;
          }
       }
    }
