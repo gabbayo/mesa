@@ -157,9 +157,6 @@ VkResult radv_CreatePipelineLayout(
 
       layout->set[set].dynamic_offset_start = dynamic_offset_count;
       for (uint32_t b = 0; b < set_layout->binding_count; b++) {
-         if (set_layout->binding[b].dynamic_offset_index < 0)
-            continue;
-
          dynamic_offset_count += set_layout->binding[b].array_size;
          for (gl_shader_stage s = 0; s < MESA_SHADER_STAGES; s++) {
          }
