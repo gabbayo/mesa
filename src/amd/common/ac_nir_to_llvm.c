@@ -42,9 +42,14 @@ struct nir_to_llvm_context {
 	LLVMBuilderRef builder;
 	LLVMValueRef main_function;
 
+	struct hash_table *defs;
+
 	LLVMValueRef descriptor_sets[4];
 	LLVMValueRef workgroup_ids;
 	LLVMValueRef local_invocation_ids;
+
+	LLVMBasicBlockRef continue_block;
+	LLVMBasicBlockRef break_block;
 
 	LLVMTypeRef i1;
 	LLVMTypeRef i32;
@@ -174,10 +179,111 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
 }
 
+static LLVMValueRef get_src(struct nir_to_llvm_context *ctx, nir_src src)
+{
+	assert(src.is_ssa);
+	struct hash_entry *entry = _mesa_hash_table_search(ctx->defs, src.ssa);
+	return (LLVMValueRef)entry->data;
+}
+
+static void visit_cf_list(struct nir_to_llvm_context *ctx,
+                          struct exec_list *list);
+
+static void visit_block(struct nir_to_llvm_context *ctx, nir_block *block)
+{
+
+	nir_foreach_instr(instr, block)
+	{
+		switch (instr->type) {
+		default:
+			fprintf(stderr, "Unknown NIR instr type: ");
+			nir_print_instr(instr, stderr);
+			fprintf(stderr, "\n");
+			abort();
+		}
+	}
+}
+
+static void visit_if(struct nir_to_llvm_context *ctx, nir_if *if_stmt)
+{
+	LLVMValueRef value = get_src(ctx, if_stmt->condition);
+
+	LLVMBasicBlockRef merge_block =
+	    LLVMAppendBasicBlockInContext(ctx->context, ctx->main_function, "");
+	LLVMBasicBlockRef if_block =
+	    LLVMAppendBasicBlockInContext(ctx->context, ctx->main_function, "");
+	LLVMBasicBlockRef else_block = merge_block;
+	if (!exec_list_is_empty(&if_stmt->else_list))
+		else_block = LLVMAppendBasicBlockInContext(
+		    ctx->context, ctx->main_function, "");
+
+	LLVMValueRef cond = LLVMBuildICmp(ctx->builder, LLVMIntNE, value,
+	                                  LLVMConstInt(ctx->i32, 0, false), "");
+	LLVMBuildCondBr(ctx->builder, cond, if_block, else_block);
+
+	LLVMPositionBuilderAtEnd(ctx->builder, if_block);
+	visit_cf_list(ctx, &if_stmt->then_list);
+	LLVMBuildBr(ctx->builder, merge_block);
+
+	if (!exec_list_is_empty(&if_stmt->else_list)) {
+		LLVMPositionBuilderAtEnd(ctx->builder, else_block);
+		visit_cf_list(ctx, &if_stmt->else_list);
+		LLVMBuildBr(ctx->builder, merge_block);
+	}
+
+	LLVMPositionBuilderAtEnd(ctx->builder, merge_block);
+}
+
+static void visit_loop(struct nir_to_llvm_context *ctx, nir_loop *loop)
+{
+	LLVMBasicBlockRef continue_parent = ctx->continue_block;
+	LLVMBasicBlockRef break_parent = ctx->break_block;
+
+	ctx->continue_block =
+	    LLVMAppendBasicBlockInContext(ctx->context, ctx->main_function, "");
+	ctx->break_block =
+	    LLVMAppendBasicBlockInContext(ctx->context, ctx->main_function, "");
+
+	LLVMBuildBr(ctx->builder, ctx->continue_block);
+	LLVMPositionBuilderAtEnd(ctx->builder, ctx->continue_block);
+	visit_cf_list(ctx, &loop->body);
+
+	LLVMBuildBr(ctx->builder, ctx->continue_block);
+	LLVMPositionBuilderAtEnd(ctx->builder, ctx->break_block);
+
+	ctx->continue_block = continue_parent;
+	ctx->break_block = break_parent;
+}
+
+static void visit_cf_list(struct nir_to_llvm_context *ctx,
+                          struct exec_list *list)
+{
+	foreach_list_typed(nir_cf_node, node, node, list)
+	{
+		switch (node->type) {
+		case nir_cf_node_block:
+			visit_block(ctx, nir_cf_node_as_block(node));
+			break;
+
+		case nir_cf_node_if:
+			visit_if(ctx, nir_cf_node_as_if(node));
+			break;
+
+		case nir_cf_node_loop:
+			visit_loop(ctx, nir_cf_node_as_loop(node));
+			break;
+
+		default:
+			assert(0);
+		}
+	}
+}
+
 LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
                                        struct nir_shader *nir)
 {
 	struct nir_to_llvm_context ctx = {};
+	struct nir_function *func;
 	ctx.context = LLVMContextCreate();
 	ctx.module = LLVMModuleCreateWithNameInContext("shader", ctx.context);
 	setup_types(&ctx);
@@ -185,8 +291,15 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 	ctx.builder = LLVMCreateBuilderInContext(ctx.context);
 	create_function(&ctx, nir);
 
+	ctx.defs = _mesa_hash_table_create(NULL, _mesa_hash_pointer,
+	                                   _mesa_key_pointer_equal);
+
+	func = (struct nir_function *)exec_list_get_head(&nir->functions);
+	visit_cf_list(&ctx, &func->impl->body);
+
 	LLVMBuildRetVoid(ctx.builder);
 	LLVMDisposeBuilder(ctx.builder);
+	ralloc_free(ctx.defs);
 
 	return ctx.module;
 }
