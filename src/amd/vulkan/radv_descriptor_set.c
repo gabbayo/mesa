@@ -220,6 +220,34 @@ VkResult radv_ResetDescriptorPool(
    return VK_SUCCESS;
 }
 
+static VkResult
+radv_descriptor_set_create(struct radv_device *device,
+			   struct radv_descriptor_pool *pool,
+			   const struct radv_descriptor_set_layout *layout,
+			   struct radv_descriptor_set **out_set)
+{
+    struct radv_descriptor_set *set;
+
+    set = radv_alloc2(&device->alloc, NULL, sizeof(struct radv_descriptor_set),
+		      8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+
+    if (!set)
+	return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+    memset(set, 0, sizeof(*set));
+
+    *out_set = set;
+    return VK_SUCCESS;
+}
+
+static void
+radv_descriptor_set_destroy(struct radv_device *device,
+			    struct radv_descriptor_pool *pool,
+			    struct radv_descriptor_set *set)
+{
+    radv_free2(&device->alloc, NULL, set);
+}
+
 VkResult radv_AllocateDescriptorSets(
     VkDevice                                    _device,
     const VkDescriptorSetAllocateInfo*          pAllocateInfo,
@@ -229,7 +257,24 @@ VkResult radv_AllocateDescriptorSets(
    RADV_FROM_HANDLE(radv_descriptor_pool, pool, pAllocateInfo->descriptorPool);
 
    VkResult result = VK_SUCCESS;
+   uint32_t i;
+   struct radv_descriptor_set *set;
 
+   /* allocate a set of buffers for each shader to contain descriptors */
+   for (i = 0; i < pAllocateInfo->descriptorSetCount; i++) {
+      RADV_FROM_HANDLE(radv_descriptor_set_layout, layout,
+                       pAllocateInfo->pSetLayouts[i]);
+
+      result = radv_descriptor_set_create(device, pool, layout, &set);
+      if (result != VK_SUCCESS)
+        break;
+
+      pDescriptorSets[i] = radv_descriptor_set_to_handle(set);
+   }
+
+   if (result != VK_SUCCESS)
+     radv_FreeDescriptorSets(_device, pAllocateInfo->descriptorPool,
+                             i, pDescriptorSets);
    return result;
 }
 
@@ -242,6 +287,11 @@ VkResult radv_FreeDescriptorSets(
    RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_descriptor_pool, pool, descriptorPool);
 
+   for (uint32_t i = 0; i < count; i++) {
+     RADV_FROM_HANDLE(radv_descriptor_set, set, pDescriptorSets[i]);
+
+     radv_descriptor_set_destroy(device, pool, set);
+   }
    return VK_SUCCESS;
 }
 
