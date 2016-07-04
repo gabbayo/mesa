@@ -308,5 +308,14 @@ void radv_UpdateDescriptorSets(
     const VkCopyDescriptorSet*                  pDescriptorCopies)
 {
    RADV_FROM_HANDLE(radv_device, device, _device);
+   uint32_t i;
 
+   for (i = 0; i < descriptorWriteCount; i++) {
+       const VkWriteDescriptorSet *writeset = &pDescriptorWrites[i];
+       RADV_FROM_HANDLE(radv_descriptor_set, set, writeset->dstSet);
+
+   }
+   for (i = 0; i < descriptorCopyCount; i++) {
+       const VkCopyDescriptorSet *copyset = &pDescriptorCopies[i];
+   }
 }
