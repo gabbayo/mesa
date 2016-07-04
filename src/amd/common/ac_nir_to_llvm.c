@@ -179,11 +179,159 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
 }
 
+static LLVMValueRef trim_vector(struct nir_to_llvm_context *ctx,
+                                LLVMValueRef value, unsigned count)
+{
+	LLVMTypeRef type = LLVMTypeOf(value);
+	unsigned num_components = LLVMGetTypeKind(type) == LLVMVectorTypeKind
+	                              ? LLVMGetVectorSize(type)
+	                              : 1;
+	if (count == num_components)
+		return value;
+
+	LLVMValueRef masks[] = {
+	    LLVMConstInt(ctx->i32, 0, false), LLVMConstInt(ctx->i32, 1, false),
+	    LLVMConstInt(ctx->i32, 2, false), LLVMConstInt(ctx->i32, 3, false)};
+
+	if (count == 1)
+		return LLVMBuildExtractElement(ctx->builder, value, masks[0],
+		                               "");
+
+	LLVMValueRef swizzle = LLVMConstVector(masks, count);
+	return LLVMBuildShuffleVector(ctx->builder, value, value, swizzle, "");
+}
+
 static LLVMValueRef get_src(struct nir_to_llvm_context *ctx, nir_src src)
 {
 	assert(src.is_ssa);
 	struct hash_entry *entry = _mesa_hash_table_search(ctx->defs, src.ssa);
 	return (LLVMValueRef)entry->data;
+}
+
+static LLVMValueRef get_alu_src(struct nir_to_llvm_context *ctx,
+                                nir_alu_src src)
+{
+	LLVMValueRef value = get_src(ctx, src.src);
+	bool need_swizzle = false;
+
+	assert(value);
+	LLVMTypeRef type = LLVMTypeOf(value);
+	unsigned num_components = LLVMGetTypeKind(type) == LLVMVectorTypeKind
+	                              ? LLVMGetVectorSize(type)
+	                              : 0;
+	for (unsigned i = 0; i < num_components; ++i)
+		if (src.swizzle[i] != i)
+			need_swizzle = true;
+	if (need_swizzle) {
+		LLVMValueRef masks[] = {
+		    LLVMConstInt(ctx->i32, src.swizzle[0], false),
+		    LLVMConstInt(ctx->i32, src.swizzle[1], false),
+		    LLVMConstInt(ctx->i32, src.swizzle[2], false),
+		    LLVMConstInt(ctx->i32, src.swizzle[3], false)};
+		LLVMValueRef swizzle = LLVMConstVector(masks, num_components);
+		value = LLVMBuildShuffleVector(ctx->builder, value, value,
+		                               swizzle, "");
+	}
+	assert(!src.negate);
+	assert(!src.abs);
+	return value;
+}
+
+static LLVMValueRef emit_int_cmp(struct nir_to_llvm_context *ctx,
+                                 LLVMIntPredicate pred, LLVMValueRef src0,
+                                 LLVMValueRef src1)
+{
+	LLVMValueRef result = LLVMBuildICmp(ctx->builder, pred, src0, src1, "");
+	return LLVMBuildSelect(ctx->builder, result,
+	                       LLVMConstInt(ctx->i32, 0xFFFFFFFF, false),
+	                       LLVMConstInt(ctx->i32, 0, false), "");
+}
+
+static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
+{
+	LLVMValueRef src[4], result = NULL;
+
+	assert(nir_op_infos[instr->op].num_inputs <= ARRAY_SIZE(src));
+	for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
+		src[i] = trim_vector(ctx, get_alu_src(ctx, instr->src[i]),
+		                     instr->dest.dest.ssa.num_components);
+
+	switch (instr->op) {
+	case nir_op_fmov:
+	case nir_op_imov:
+		result = src[0];
+		break;
+	case nir_op_iadd:
+		result = LLVMBuildAdd(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_isub:
+		result = LLVMBuildSub(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_imul:
+		result = LLVMBuildMul(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_seq:
+		result = emit_int_cmp(ctx, LLVMIntEQ, src[0], src[1]);
+		break;
+	case nir_op_sne:
+		result = emit_int_cmp(ctx, LLVMIntNE, src[0], src[1]);
+		break;
+	case nir_op_slt:
+		result = emit_int_cmp(ctx, LLVMIntSLT, src[0], src[1]);
+		break;
+	case nir_op_sge:
+		result = emit_int_cmp(ctx, LLVMIntSGE, src[0], src[1]);
+		break;
+	case nir_op_ult:
+		result = emit_int_cmp(ctx, LLVMIntULT, src[0], src[1]);
+		break;
+	case nir_op_uge:
+		result = emit_int_cmp(ctx, LLVMIntUGE, src[0], src[1]);
+		break;
+	default:
+		fprintf(stderr, "Unknown NIR alu instr: ");
+		nir_print_instr(&instr->instr, stderr);
+		fprintf(stderr, "\n");
+		abort();
+	}
+
+	if (result) {
+		assert(instr->dest.dest.is_ssa);
+		_mesa_hash_table_insert(ctx->defs, &instr->dest.dest.ssa,
+		                        result);
+	}
+}
+
+static void visit_load_const(struct nir_to_llvm_context *ctx,
+                             nir_load_const_instr *instr)
+{
+	LLVMValueRef values[4], value = NULL;
+	LLVMTypeRef element_type =
+	    LLVMIntTypeInContext(ctx->context, instr->def.bit_size);
+
+	for (unsigned i = 0; i < instr->def.num_components; ++i) {
+		switch (instr->def.bit_size) {
+		case 32:
+			values[i] = LLVMConstInt(element_type,
+			                         instr->value.u32[i], false);
+			break;
+		case 64:
+			values[i] = LLVMConstInt(element_type,
+			                         instr->value.u64[i], false);
+			break;
+		default:
+			fprintf(stderr,
+			        "unsupported nir load_const bit_size: %d\n",
+			        instr->def.bit_size);
+			abort();
+		}
+	}
+	if (instr->def.num_components > 1) {
+		value = LLVMConstVector(values, instr->def.num_components);
+	} else
+		value = values[0];
+
+	_mesa_hash_table_insert(ctx->defs, &instr->def, value);
 }
 
 static void visit_cf_list(struct nir_to_llvm_context *ctx,
@@ -195,6 +343,12 @@ static void visit_block(struct nir_to_llvm_context *ctx, nir_block *block)
 	nir_foreach_instr(instr, block)
 	{
 		switch (instr->type) {
+		case nir_instr_type_alu:
+			visit_alu(ctx, nir_instr_as_alu(instr));
+			break;
+		case nir_instr_type_load_const:
+			visit_load_const(ctx, nir_instr_as_load_const(instr));
+			break;
 		default:
 			fprintf(stderr, "Unknown NIR instr type: ");
 			nir_print_instr(instr, stderr);
