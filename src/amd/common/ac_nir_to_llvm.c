@@ -53,7 +53,11 @@ struct nir_to_llvm_context {
 
 	LLVMTypeRef i1;
 	LLVMTypeRef i32;
+	LLVMTypeRef v4i32;
 	LLVMTypeRef f32;
+
+	unsigned uniform_md_kind;
+	LLVMValueRef empty_md;
 };
 
 static void set_llvm_calling_convention(LLVMValueRef func,
@@ -176,7 +180,12 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 {
 	ctx->i1 = LLVMIntTypeInContext(ctx->context, 1);
 	ctx->i32 = LLVMIntTypeInContext(ctx->context, 32);
+	ctx->v4i32 = LLVMVectorType(ctx->i32, 4);
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
+
+	ctx->uniform_md_kind =
+	    LLVMGetMDKindIDInContext(ctx->context, "amdgpu.uniform", 14);
+	ctx->empty_md = LLVMMDNodeInContext(ctx->context, NULL, 0);
 }
 
 static LLVMValueRef trim_vector(struct nir_to_llvm_context *ctx,
@@ -199,6 +208,16 @@ static LLVMValueRef trim_vector(struct nir_to_llvm_context *ctx,
 
 	LLVMValueRef swizzle = LLVMConstVector(masks, count);
 	return LLVMBuildShuffleVector(ctx->builder, value, value, swizzle, "");
+}
+
+static LLVMTypeRef get_def_type(struct nir_to_llvm_context *ctx,
+                                nir_ssa_def *def)
+{
+	LLVMTypeRef type = LLVMIntTypeInContext(ctx->context, def->bit_size);
+	if (def->num_components > 1) {
+		type = LLVMVectorType(type, def->num_components);
+	}
+	return type;
 }
 
 static LLVMValueRef get_src(struct nir_to_llvm_context *ctx, nir_src src)
@@ -334,6 +353,164 @@ static void visit_load_const(struct nir_to_llvm_context *ctx,
 	_mesa_hash_table_insert(ctx->defs, &instr->def, value);
 }
 
+static LLVMValueRef cast_ptr(struct nir_to_llvm_context *ctx, LLVMValueRef ptr,
+                             LLVMTypeRef type)
+{
+	int addr_space = LLVMGetPointerAddressSpace(LLVMTypeOf(ptr));
+	return LLVMBuildBitCast(ctx->builder, ptr,
+	                        LLVMPointerType(type, addr_space), "");
+}
+
+static LLVMValueRef
+emit_llvm_intrinsic(struct nir_to_llvm_context *ctx, const char *name,
+                    LLVMTypeRef return_type, LLVMValueRef *params,
+                    unsigned param_count, LLVMAttribute attribs)
+{
+	LLVMValueRef function;
+
+	function = LLVMGetNamedFunction(ctx->module, name);
+	if (!function) {
+		LLVMTypeRef param_types[32], function_type;
+		unsigned i;
+
+		assert(param_count <= 32);
+
+		for (i = 0; i < param_count; ++i) {
+			assert(params[i]);
+			param_types[i] = LLVMTypeOf(params[i]);
+		}
+		function_type =
+		    LLVMFunctionType(return_type, param_types, param_count, 0);
+		function = LLVMAddFunction(ctx->module, name, function_type);
+
+		LLVMSetFunctionCallConv(function, LLVMCCallConv);
+		LLVMSetLinkage(function, LLVMExternalLinkage);
+
+		LLVMAddFunctionAttr(function, attribs | LLVMNoUnwindAttribute);
+	}
+	return LLVMBuildCall(ctx->builder, function, params, param_count, "");
+}
+
+static LLVMValueRef visit_vulkan_resource_index(struct nir_to_llvm_context *ctx,
+                                                nir_intrinsic_instr *instr)
+{
+	LLVMValueRef index = get_src(ctx, instr->src[0]);
+	LLVMValueRef desc_ptr =
+	    ctx->descriptor_sets[nir_intrinsic_desc_set(instr)];
+	unsigned base_offset = nir_intrinsic_binding(instr) * 16 / 4;
+	LLVMValueRef offset = LLVMConstInt(ctx->i32, base_offset, false);
+	LLVMValueRef stride = LLVMConstInt(ctx->i32, 4, false);
+	index = LLVMBuildMul(ctx->builder, index, stride, "");
+	offset = LLVMBuildAdd(ctx->builder, offset, index, "");
+
+	LLVMValueRef indices[] = {LLVMConstInt(ctx->i32, 0, false), offset};
+	desc_ptr = LLVMBuildGEP(ctx->builder, desc_ptr, indices, 2, "");
+	desc_ptr = cast_ptr(ctx, desc_ptr, ctx->v4i32);
+	LLVMSetMetadata(desc_ptr, ctx->uniform_md_kind, ctx->empty_md);
+
+	return LLVMBuildLoad(ctx->builder, desc_ptr, "");
+}
+
+static void visit_store_ssbo(struct nir_to_llvm_context *ctx,
+                             nir_intrinsic_instr *instr)
+{
+	assert(nir_intrinsic_write_mask(instr) ==
+	       (1 << instr->num_components) - 1);
+	const char *store_name;
+	LLVMTypeRef data_type = ctx->f32;
+	if (instr->num_components > 1)
+		data_type = LLVMVectorType(ctx->f32, instr->num_components);
+
+	if (instr->num_components == 4)
+		store_name = "llvm.amdgcn.buffer.store.v4f32";
+	else if (instr->num_components == 2)
+		store_name = "llvm.amdgcn.buffer.store.v2f32";
+	else if (instr->num_components == 1)
+		store_name = "llvm.amdgcn.buffer.store.f32";
+	else
+		abort();
+
+	LLVMValueRef params[] = {
+	    LLVMBuildBitCast(ctx->builder, get_src(ctx, instr->src[0]),
+	                     data_type, ""),
+	    get_src(ctx, instr->src[1]), LLVMConstInt(ctx->i32, 0, false),
+	    get_src(ctx, instr->src[2]), LLVMConstInt(ctx->i1, 0, false),
+	    LLVMConstInt(ctx->i1, 0, false),
+	};
+
+	emit_llvm_intrinsic(ctx, store_name,
+	                    LLVMVoidTypeInContext(ctx->context), params, 6, 0);
+}
+
+static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
+                                      nir_intrinsic_instr *instr)
+{
+	const char *load_name;
+	LLVMTypeRef data_type = ctx->f32;
+	if (instr->num_components > 1)
+		data_type = LLVMVectorType(ctx->f32, instr->num_components);
+
+	if (instr->num_components == 4)
+		load_name = "llvm.amdgcn.buffer.load.v4f32";
+	else if (instr->num_components == 2)
+		load_name = "llvm.amdgcn.buffer.load.v2f32";
+	else if (instr->num_components == 1)
+		load_name = "llvm.amdgcn.buffer.load.f32";
+	else
+		abort();
+
+	LLVMValueRef params[] = {
+	    get_src(ctx, instr->src[1]),     LLVMConstInt(ctx->i32, 0, false),
+	    get_src(ctx, instr->src[2]),     LLVMConstInt(ctx->i1, 0, false),
+	    LLVMConstInt(ctx->i1, 0, false),
+	};
+
+	LLVMValueRef ret =
+	    emit_llvm_intrinsic(ctx, load_name, data_type, params, 5, 0);
+
+	return LLVMBuildBitCast(ctx->builder, ret,
+	                        get_def_type(ctx, &instr->dest.ssa), "");
+}
+
+static void visit_intrinsic(struct nir_to_llvm_context *ctx,
+                            nir_intrinsic_instr *instr)
+{
+	const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
+	LLVMValueRef result = NULL;
+
+	switch (instr->intrinsic) {
+	case nir_intrinsic_load_work_group_id: {
+		result = ctx->workgroup_ids;
+		break;
+	}
+	case nir_intrinsic_load_local_invocation_id: {
+		result = ctx->local_invocation_ids;
+		break;
+	}
+	case nir_intrinsic_vulkan_resource_index:
+		result = visit_vulkan_resource_index(ctx, instr);
+		break;
+	case nir_intrinsic_store_ssbo:
+		visit_store_ssbo(ctx, instr);
+		break;
+	case nir_intrinsic_load_ssbo:
+		result = visit_load_buffer(ctx, instr);
+		break;
+	case nir_intrinsic_load_ubo:
+		result = visit_load_buffer(ctx, instr);
+		break;
+	default:
+		fprintf(stderr, "Unknown intrinsic: ");
+		nir_print_instr(&instr->instr, stderr);
+		fprintf(stderr, "\n");
+		break;
+	}
+	if (result) {
+		assert(info->has_dest && instr->dest.is_ssa);
+		_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
+	}
+}
+
 static void visit_cf_list(struct nir_to_llvm_context *ctx,
                           struct exec_list *list);
 
@@ -348,6 +525,9 @@ static void visit_block(struct nir_to_llvm_context *ctx, nir_block *block)
 			break;
 		case nir_instr_type_load_const:
 			visit_load_const(ctx, nir_instr_as_load_const(instr));
+			break;
+		case nir_instr_type_intrinsic:
+			visit_intrinsic(ctx, nir_instr_as_intrinsic(instr));
 			break;
 		default:
 			fprintf(stderr, "Unknown NIR instr type: ");
