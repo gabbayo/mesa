@@ -227,14 +227,17 @@ radv_descriptor_set_create(struct radv_device *device,
 			   struct radv_descriptor_set **out_set)
 {
     struct radv_descriptor_set *set;
-    set = radv_alloc2(&device->alloc, NULL, sizeof(struct radv_descriptor_set),
-		      8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+    unsigned mem_size = sizeof(struct radv_descriptor_set) +
+                        sizeof(struct radv_bo *) * layout->buffer_count;
+    set = radv_alloc2(&device->alloc, NULL, mem_size, 8,
+		      VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
 
     if (!set)
 	return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
-    memset(set, 0, sizeof(*set));
+    memset(set, 0, mem_size);
 
+    set->layout = layout;
     set->bo.bo = device->ws->buffer_create(device->ws, layout->size,
 					    16, RADEON_DOMAIN_VRAM, 0);
 

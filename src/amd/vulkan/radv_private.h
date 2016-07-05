@@ -964,26 +964,13 @@ struct radv_descriptor_set_layout {
    struct radv_descriptor_set_binding_layout binding[0];
 };
 
-struct radv_descriptor {
-   VkDescriptorType type;
-
-   union {
-      struct {
-         struct radv_image_view *image_view;
-         struct radv_sampler *sampler;
-      };
-
-      struct radv_buffer_view *buffer_view;
-   };
-};
-
 struct radv_descriptor_set {
    const struct radv_descriptor_set_layout *layout;
    uint32_t size;
    uint32_t buffer_count;
    struct radv_buffer_view *buffer_views;
    struct radv_bo bo;
-   struct radv_descriptor descriptors[0];
+   struct radv_bo *descriptors[0];
 };
 
 #if 0
