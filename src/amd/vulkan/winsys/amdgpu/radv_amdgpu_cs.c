@@ -131,7 +131,7 @@ static void amdgpu_cs_add_buffer(struct radeon_winsys_cs *_cs,
    }
 
    if (cs->num_buffers == cs->max_num_buffers) {
-      unsigned new_count = cs->max_num_buffers * 2;
+      unsigned new_count = MAX2(1, cs->max_num_buffers * 2);
       cs->handles = realloc(cs->handles, new_count * sizeof(amdgpu_bo_handle));
       cs->priorities = realloc(cs->priorities, new_count * sizeof(uint8_t));
       cs->max_num_buffers = new_count;
