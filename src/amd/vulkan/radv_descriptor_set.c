@@ -227,7 +227,6 @@ radv_descriptor_set_create(struct radv_device *device,
 			   struct radv_descriptor_set **out_set)
 {
     struct radv_descriptor_set *set;
-    size_t bo_size;
     set = radv_alloc2(&device->alloc, NULL, sizeof(struct radv_descriptor_set),
 		      8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
 
@@ -236,8 +235,7 @@ radv_descriptor_set_create(struct radv_device *device,
 
     memset(set, 0, sizeof(*set));
 
-    bo_size = 8 * sizeof(uint32_t); /* * number of descs in set */
-    set->bo.bo = device->ws->buffer_create(device->ws, bo_size,
+    set->bo.bo = device->ws->buffer_create(device->ws, layout->size,
 					    16, RADEON_DOMAIN_VRAM, 0);
 
     *out_set = set;
