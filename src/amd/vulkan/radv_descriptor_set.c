@@ -5,6 +5,7 @@
 #include <fcntl.h>
 
 #include "radv_private.h"
+#include "sid.h"
 
 VkResult radv_CreateDescriptorSetLayout(
     VkDevice                                    _device,
@@ -241,6 +242,7 @@ radv_descriptor_set_create(struct radv_device *device,
     set->bo.bo = device->ws->buffer_create(device->ws, layout->size,
 					    16, RADEON_DOMAIN_VRAM, 0);
 
+    set->mapped_ptr = (uint32_t*)device->ws->buffer_map(set->bo.bo);
     *out_set = set;
     return VK_SUCCESS;
 }
@@ -301,6 +303,33 @@ VkResult radv_FreeDescriptorSets(
    return VK_SUCCESS;
 }
 
+
+static void write_buffer_descriptor(struct radv_device *device,
+                                    unsigned *dst,
+                                    struct radv_bo **buffer_list,
+                                    const VkDescriptorBufferInfo *buffer_info)
+{
+   RADV_FROM_HANDLE(radv_buffer, buffer, buffer_info->buffer);
+   uint64_t va = device->ws->buffer_get_va(buffer->bo->bo);
+   uint32_t range = buffer_info->range;
+
+   if (buffer_info->range == VK_WHOLE_SIZE)
+      range = buffer->size - buffer_info->offset;
+
+   va += buffer_info->offset + buffer->offset;
+   dst[0] = va;
+   dst[1] = S_008F04_BASE_ADDRESS_HI(va >> 32);
+   dst[2] = range;
+   dst[3] = S_008F0C_DST_SEL_X(V_008F0C_SQ_SEL_X) |
+            S_008F0C_DST_SEL_Y(V_008F0C_SQ_SEL_Y) |
+            S_008F0C_DST_SEL_Z(V_008F0C_SQ_SEL_Z) |
+            S_008F0C_DST_SEL_W(V_008F0C_SQ_SEL_W) |
+            S_008F0C_NUM_FORMAT(V_008F0C_BUF_NUM_FORMAT_FLOAT) |
+            S_008F0C_DATA_FORMAT(V_008F0C_BUF_DATA_FORMAT_32);
+
+   *buffer_list = buffer->bo;
+}
+
 void radv_UpdateDescriptorSets(
     VkDevice                                    _device,
     uint32_t                                    descriptorWriteCount,
@@ -309,11 +338,33 @@ void radv_UpdateDescriptorSets(
     const VkCopyDescriptorSet*                  pDescriptorCopies)
 {
    RADV_FROM_HANDLE(radv_device, device, _device);
-   uint32_t i;
+   uint32_t i, j;
 
    for (i = 0; i < descriptorWriteCount; i++) {
-       const VkWriteDescriptorSet *writeset = &pDescriptorWrites[i];
-       RADV_FROM_HANDLE(radv_descriptor_set, set, writeset->dstSet);
+      const VkWriteDescriptorSet *writeset = &pDescriptorWrites[i];
+      RADV_FROM_HANDLE(radv_descriptor_set, set, writeset->dstSet);
+      const struct radv_descriptor_set_binding_layout *binding_layout =
+                                   set->layout->binding + writeset->dstBinding;
+      uint32_t *ptr = set->mapped_ptr;
+      struct radv_bo **buffer_list =  set->descriptors;
+
+      ptr += binding_layout->offset / 4;
+      ptr += binding_layout->size * writeset->dstArrayElement / 4;
+      buffer_list += binding_layout->buffer_offset;
+      buffer_list += binding_layout->buffer_count * writeset->dstArrayElement;
+      for (j = 0; j < writeset->descriptorCount; ++j) {
+         switch(writeset->descriptorType) {
+         case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+         case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            write_buffer_descriptor(device, ptr, buffer_list,
+                                    writeset->pBufferInfo + j);
+            break;
+         default:
+            unreachable("unimplemented descriptor type");
+         }
+         ptr += binding_layout->size / 4;
+         buffer_list += binding_layout->buffer_count;
+      }
 
    }
    for (i = 0; i < descriptorCopyCount; i++) {

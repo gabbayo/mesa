@@ -970,6 +970,7 @@ struct radv_descriptor_set {
    uint32_t buffer_count;
    struct radv_buffer_view *buffer_views;
    struct radv_bo bo;
+   uint32_t *mapped_ptr;
    struct radv_bo *descriptors[0];
 };
 
