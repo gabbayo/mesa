@@ -375,9 +375,11 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
    }
 
    radv_pipeline_init_blend_state(pipeline, pCreateInfo);
+   radv_pipeline_init_depth_stencil_state(pipeline, pCreateInfo);
    //   nir_shader *nir = _pipeline
    return VK_SUCCESS;
 }
+
 VkResult
 radv_graphics_pipeline_create(
    VkDevice _device,
