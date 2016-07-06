@@ -114,16 +114,14 @@ anv_is_aligned(uintmax_t n, uintmax_t a)
    assert(a == (a & -a));
    return (n & (a - 1)) == 0;
 }
-
 static inline uint32_t
-anv_minify(uint32_t n, uint32_t levels)
+radv_minify(uint32_t n, uint32_t levels)
 {
    if (unlikely(n == 0))
       return 0;
    else
       return MAX(n >> levels, 1);
 }
-
 static inline float
 anv_clamp_f(float f, float min, float max)
 {
@@ -555,9 +553,7 @@ struct radv_instance {
 VkResult radv_init_wsi(struct radv_physical_device *physical_device);
 void radv_finish_wsi(struct radv_physical_device *physical_device);
 
-#if 0
-
-struct anv_meta_state {
+struct radv_meta_state {
    VkAllocationCallbacks alloc;
 
    /**
@@ -572,11 +568,11 @@ struct anv_meta_state {
        * compiler's inability to dynamically set the render target index of
        * the render target write message.
        */
-      struct anv_pipeline *color_pipelines[MAX_RTS];
+      struct radv_pipeline *color_pipelines[MAX_RTS];
 
-      struct anv_pipeline *depth_only_pipeline;
-      struct anv_pipeline *stencil_only_pipeline;
-      struct anv_pipeline *depthstencil_pipeline;
+      struct radv_pipeline *depth_only_pipeline;
+      struct radv_pipeline *stencil_only_pipeline;
+      struct radv_pipeline *depthstencil_pipeline;
    } clear[1 + MAX_SAMPLES_LOG2];
 
    struct {
@@ -604,7 +600,7 @@ struct anv_meta_state {
       VkDescriptorSetLayout                     buf_ds_layout;
 
       /* Pipelines indexed by source and destination type.  See the
-       * blit2d_src_type and blit2d_dst_type enums in anv_meta_blit2d.c to
+       * blit2d_src_type and blit2d_dst_type enums in radv_meta_blit2d.c to
        * see what these mean.
        */
       VkPipeline pipelines[2][3];
@@ -620,8 +616,6 @@ struct anv_meta_state {
    } resolve;
 };
 
-#endif
-   
 struct radv_queue {
     VK_LOADER_DATA                              _loader_data;
 
@@ -671,6 +665,8 @@ struct radv_device {
     uint32_t                                    chipset_id;
     struct radeon_winsys *ws;
     LLVMTargetMachineRef target_machine;
+
+    struct radv_meta_state                       meta_state;
 #if 0
     struct brw_device_info                      info;
     struct isl_device                           isl_dev;
@@ -692,7 +688,7 @@ struct radv_device {
 
     struct anv_bo                               workaround_bo;
 
-    struct anv_meta_state                       meta_state;
+
 
     struct anv_state                            border_colors;
 
@@ -1090,12 +1086,12 @@ enum anv_pipe_bits {
    ANV_PIPE_DATA_CACHE_FLUSH_BIT | \
    ANV_PIPE_TEXTURE_CACHE_INVALIDATE_BIT | \
    ANV_PIPE_INSTRUCTION_CACHE_INVALIDATE_BIT)
-
-struct anv_vertex_binding {
-   struct anv_buffer *                          buffer;
+#endif
+struct radv_vertex_binding {
+   struct radv_buffer *                          buffer;
    VkDeviceSize                                 offset;
 };
-
+#if 0
 struct anv_push_constants {
    /* Current allocated size of this push constants data structure.
     * Because a decent chunk of it may not be used (images on SKL, for
@@ -1122,8 +1118,8 @@ struct anv_push_constants {
    /* Image data for image_load_store on pre-SKL */
    struct brw_image_param images[MAX_IMAGES];
 };
-
-struct anv_dynamic_state {
+#endif
+struct radv_dynamic_state {
    struct {
       uint32_t                                  count;
       VkViewport                                viewports[MAX_VIEWPORTS];
@@ -1165,21 +1161,21 @@ struct anv_dynamic_state {
    } stencil_reference;
 };
 
-extern const struct anv_dynamic_state default_dynamic_state;
+extern const struct radv_dynamic_state default_dynamic_state;
 
-void anv_dynamic_state_copy(struct anv_dynamic_state *dest,
-                            const struct anv_dynamic_state *src,
+void radv_dynamic_state_copy(struct radv_dynamic_state *dest,
+                            const struct radv_dynamic_state *src,
                             uint32_t copy_mask);
-
 /**
  * Attachment state when recording a renderpass instance.
  *
  * The clear value is valid only if there exists a pending clear.
  */
-struct anv_attachment_state {
+struct radv_attachment_state {
    VkImageAspectFlags                           pending_clear_aspects;
    VkClearValue                                 clear_value;
 };
+#if 0
 
 /** State required while building cmd buffer */
 struct anv_cmd_state {
@@ -1225,6 +1221,23 @@ struct anv_cmd_state {
 };
 
 #endif
+
+struct radv_cmd_state {
+   uint32_t                                     vb_dirty;
+  uint32_t dirty;
+   struct radv_pipeline *                        pipeline;
+   struct radv_pipeline *                        compute_pipeline;
+   struct radv_framebuffer *                     framebuffer;
+   struct radv_render_pass *                     pass;
+   struct radv_subpass *                         subpass;
+   struct radv_dynamic_state                     dynamic;
+   struct radv_vertex_binding                    vertex_bindings[MAX_VBS];
+   struct radv_descriptor_set *                  descriptors[MAX_SETS];
+   VkShaderStageFlags                           descriptors_dirty;
+
+   struct radv_attachment_state *                attachments;
+   VkRect2D                                     render_area;
+};
 struct radv_cmd_pool {
    VkAllocationCallbacks                        alloc;
    struct list_head                             cmd_buffers;
@@ -1251,6 +1264,7 @@ struct radv_cmd_buffer {
    VkCommandBufferUsageFlags                    usage_flags;
    VkCommandBufferLevel                         level;
    struct radeon_winsys_cs *cs;
+   struct radv_cmd_state state;
 };
 
 void si_init_config(struct radv_physical_device *physical_device,
@@ -1313,10 +1327,10 @@ anv_cmd_buffer_push_constants(struct anv_cmd_buffer *cmd_buffer,
                               gl_shader_stage stage);
 struct anv_state
 anv_cmd_buffer_cs_push_constants(struct anv_cmd_buffer *cmd_buffer);
-
-void anv_cmd_buffer_clear_subpass(struct anv_cmd_buffer *cmd_buffer);
-void anv_cmd_buffer_resolve_subpass(struct anv_cmd_buffer *cmd_buffer);
-
+#endif
+void radv_cmd_buffer_clear_subpass(struct radv_cmd_buffer *cmd_buffer);
+void radv_cmd_buffer_resolve_subpass(struct radv_cmd_buffer *cmd_buffer);
+#if 0
 const struct anv_image_view *
 anv_cmd_buffer_get_depth_stencil_view(const struct anv_cmd_buffer *cmd_buffer);
 
@@ -1594,9 +1608,8 @@ struct radv_image {
 #endif
 };
 
-#if 0
 static inline uint32_t
-anv_get_layerCount(const struct anv_image *image,
+radv_get_layerCount(const struct radv_image *image,
                    const VkImageSubresourceRange *range)
 {
    return range->layerCount == VK_REMAINING_ARRAY_LAYERS ?
@@ -1604,13 +1617,12 @@ anv_get_layerCount(const struct anv_image *image,
 }
 
 static inline uint32_t
-anv_get_levelCount(const struct anv_image *image,
+radv_get_levelCount(const struct radv_image *image,
                    const VkImageSubresourceRange *range)
 {
    return range->levelCount == VK_REMAINING_MIP_LEVELS ?
           image->levels - range->baseMipLevel : range->levelCount;
 }
-#endif
 
 struct radv_image_view {
    const struct radv_image *image; /**< VkImageViewCreateInfo::image */
@@ -1638,13 +1650,20 @@ VkResult radv_image_create(VkDevice _device,
 struct anv_surface *
 anv_image_get_surface_for_aspect_mask(struct anv_image *image,
                                       VkImageAspectFlags aspect_mask);
+#endif
 
-void anv_image_view_init(struct anv_image_view *view,
-                         struct anv_device *device,
-                         const VkImageViewCreateInfo* pCreateInfo,
-                         struct anv_cmd_buffer *cmd_buffer,
-                         VkImageUsageFlags usage_mask);
+void radv_image_view_init(struct radv_image_view *view,
+			  struct radv_device *device,
+			  const VkImageViewCreateInfo* pCreateInfo,
+			  struct radv_cmd_buffer *cmd_buffer,
+			  VkImageUsageFlags usage_mask);
 
+struct radv_buffer_view {
+   struct radv_bo *bo;
+   uint32_t offset; /**< Offset into bo. */
+   uint64_t range; /**< VkBufferViewCreateInfo::range */
+};
+#if 0
 struct anv_buffer_view {
    enum isl_format format; /**< VkBufferViewCreateInfo::format */
    struct anv_bo *bo;
@@ -1662,11 +1681,10 @@ void anv_buffer_view_init(struct anv_buffer_view *view,
                           const VkBufferViewCreateInfo* pCreateInfo,
                           struct anv_cmd_buffer *cmd_buffer);
 
-enum isl_format
-anv_isl_format_for_descriptor_type(VkDescriptorType type);
+#endif
 
 static inline struct VkExtent3D
-anv_sanitize_image_extent(const VkImageType imageType,
+radv_sanitize_image_extent(const VkImageType imageType,
                           const struct VkExtent3D imageExtent)
 {
    switch (imageType) {
@@ -1682,7 +1700,7 @@ anv_sanitize_image_extent(const VkImageType imageType,
 }
 
 static inline struct VkOffset3D
-anv_sanitize_image_offset(const VkImageType imageType,
+radv_sanitize_image_offset(const VkImageType imageType,
                           const struct VkOffset3D imageOffset)
 {
    switch (imageType) {
@@ -1697,7 +1715,7 @@ anv_sanitize_image_offset(const VkImageType imageType,
    }
 }
 
-
+#if 0
 void anv_fill_buffer_surface_state(struct anv_device *device,
                                    struct anv_state state,
                                    enum isl_format format,
@@ -1754,8 +1772,9 @@ struct radv_render_pass {
    struct radv_subpass                           subpasses[0];
 };
 
+extern struct radv_render_pass radv_meta_dummy_renderpass;
 #if 0
-extern struct anv_render_pass anv_meta_dummy_renderpass;
+
 
 struct anv_query_pool_slot {
    uint64_t begin;
@@ -1768,11 +1787,11 @@ struct anv_query_pool {
    uint32_t                                     slots;
    struct anv_bo                                bo;
 };
+#endif
+VkResult radv_device_init_meta(struct radv_device *device);
+void radv_device_finish_meta(struct radv_device *device);
 
-VkResult anv_device_init_meta(struct anv_device *device);
-void anv_device_finish_meta(struct anv_device *device);
-
-
+#if 0
 void anv_dump_image_to_ppm(struct anv_device *device,
                            struct anv_image *image, unsigned miplevel,
                            unsigned array_layer, const char *filename);

@@ -3,6 +3,14 @@
 #include "radv_cs.h"
 #include "sid.h"
 
+void
+radv_dynamic_state_copy(struct radv_dynamic_state *dest,
+                       const struct radv_dynamic_state *src,
+                       uint32_t copy_mask)
+{
+
+}
+
 static VkResult radv_create_cmd_buffer(
     struct radv_device *                         device,
     struct radv_cmd_pool *                       pool,

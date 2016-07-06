@@ -111,6 +111,16 @@ fail:
    return r;
 }
 
+void
+radv_image_view_init(struct radv_image_view *iview,
+		     struct radv_device *device,
+		     const VkImageViewCreateInfo* pCreateInfo,
+		     struct radv_cmd_buffer *cmd_buffer,
+		     VkImageUsageFlags usage_mask)
+{
+
+
+}
 
 VkResult
 radv_CreateImage(VkDevice device,
@@ -162,7 +172,7 @@ radv_CreateImageView(VkDevice _device,
    if (view == NULL)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
-   //   radv_image_view_init(view, device, pCreateInfo, NULL, ~0);
+   radv_image_view_init(view, device, pCreateInfo, NULL, ~0);
 
    *pView = radv_image_view_to_handle(view);
 

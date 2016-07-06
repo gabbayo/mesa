@@ -1173,3 +1173,14 @@ VkResult radv_CreateSampler(
 
    return VK_SUCCESS;
 }
+
+void radv_DestroySampler(
+    VkDevice                                    _device,
+    VkSampler                                   _sampler,
+    const VkAllocationCallbacks*                pAllocator)
+{
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_sampler, sampler, _sampler);
+
+   radv_free2(&device->alloc, pAllocator, sampler);
+}
