@@ -282,7 +282,58 @@ radv_pipeline_init_blend_state(struct radv_pipeline *pipeline,
 	blend->cb_color_control |= S_028808_MODE(mode);
     else
 	blend->cb_color_control |= S_028808_MODE(V_028808_CB_DISABLE);
+}
 
+static uint32_t si_translate_stencil_op(enum VkStencilOp op)
+{
+    switch (op) {
+    case VK_STENCIL_OP_KEEP:
+	return V_02842C_STENCIL_KEEP;
+    case VK_STENCIL_OP_ZERO:
+	return V_02842C_STENCIL_ZERO;
+    case VK_STENCIL_OP_REPLACE:
+	return V_02842C_STENCIL_REPLACE_TEST;
+    case VK_STENCIL_OP_INCREMENT_AND_CLAMP:
+	return V_02842C_STENCIL_ADD_CLAMP;
+    case VK_STENCIL_OP_DECREMENT_AND_CLAMP:
+	return V_02842C_STENCIL_SUB_CLAMP;
+    case VK_STENCIL_OP_INVERT:
+	return V_02842C_STENCIL_INVERT;
+    case VK_STENCIL_OP_INCREMENT_AND_WRAP:
+	return V_02842C_STENCIL_ADD_WRAP;
+    case VK_STENCIL_OP_DECREMENT_AND_WRAP:
+	return V_02842C_STENCIL_SUB_WRAP;
+    default:
+	return 0;
+    }
+}
+static void
+radv_pipeline_init_depth_stencil_state(struct radv_pipeline *pipeline,
+				       const VkGraphicsPipelineCreateInfo *pCreateInfo)
+{
+    const VkPipelineDepthStencilStateCreateInfo *vkds = pCreateInfo->pDepthStencilState;
+    struct radv_depth_stencil_state *ds = &pipeline->graphics.ds;
+
+    ds->db_depth_control = S_028800_Z_ENABLE(vkds->depthTestEnable) |
+	S_028800_Z_WRITE_ENABLE(vkds->depthWriteEnable) |
+	S_028800_ZFUNC(vkds->depthCompareOp) |
+	S_028800_DEPTH_BOUNDS_ENABLE(vkds->depthBoundsTestEnable);
+
+    if (vkds->stencilTestEnable) {
+	ds->db_depth_control |= S_028800_STENCIL_ENABLE(1) | S_028800_BACKFACE_ENABLE(1);
+	ds->db_depth_control |= S_028800_STENCILFUNC(vkds->front.compareOp);
+	ds->db_stencil_control |= S_02842C_STENCILFAIL(si_translate_stencil_op(vkds->front.failOp));
+	ds->db_stencil_control |= S_02842C_STENCILZPASS(si_translate_stencil_op(vkds->front.passOp));
+	ds->db_stencil_control |= S_02842C_STENCILZFAIL(si_translate_stencil_op(vkds->front.depthFailOp));
+
+	ds->db_depth_control |= S_028800_STENCILFUNC_BF(vkds->back.compareOp);
+	ds->db_stencil_control |= S_02842C_STENCILFAIL_BF(si_translate_stencil_op(vkds->back.failOp));
+	ds->db_stencil_control |= S_02842C_STENCILZPASS_BF(si_translate_stencil_op(vkds->back.passOp));
+	ds->db_stencil_control |= S_02842C_STENCILZFAIL_BF(si_translate_stencil_op(vkds->back.depthFailOp));
+    }
+
+    ds->db_depth_bounds_min = fui(vkds->minDepthBounds);
+    ds->db_depth_bounds_max = fui(vkds->maxDepthBounds);
 }
 
 VkResult

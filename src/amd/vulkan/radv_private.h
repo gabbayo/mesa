@@ -1421,8 +1421,8 @@ struct radv_pipeline {
    union {
        struct {
 	   struct radv_blend_state blend;
-           struct radv_depth_stencil_state stencil; 
-       } graphics;
+	   struct radv_depth_stencil_state ds;
+      } graphics;
        struct {
 	   int block_size[3];
        } compute;

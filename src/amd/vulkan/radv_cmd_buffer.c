@@ -201,11 +201,23 @@ radv_bind_graphics_blend_state(struct radv_cmd_buffer *cmd_buffer,
 }
 
 static void
+radv_bind_graphics_depth_stencil_state(struct radv_cmd_buffer *cmd_buffer,
+				       struct radv_pipeline *pipeline)
+{
+    struct radv_depth_stencil_state *ds = &pipeline->graphics.ds;
+    radeon_set_context_reg(cmd_buffer->cs, R_028800_DB_DEPTH_CONTROL, ds->db_depth_control);
+    radeon_set_context_reg(cmd_buffer->cs, R_02842C_DB_STENCIL_CONTROL, ds->db_stencil_control);
+    radeon_set_context_reg(cmd_buffer->cs, R_028020_DB_DEPTH_BOUNDS_MIN, ds->db_depth_bounds_min);
+    radeon_set_context_reg(cmd_buffer->cs, R_028024_DB_DEPTH_BOUNDS_MAX, ds->db_depth_bounds_max);
+}
+
+static void
 radv_bind_graphics_pipeline(struct radv_cmd_buffer *cmd_buffer,
                            struct radv_pipeline *pipeline)
 {
    struct radeon_winsys *ws = cmd_buffer->device->ws;
 
+   radv_bind_graphics_depth_stencil_state(cmd_buffer, pipeline);
    radv_bind_graphics_blend_state(cmd_buffer, pipeline);
 }
 
