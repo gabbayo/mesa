@@ -336,6 +336,20 @@ radv_pipeline_init_depth_stencil_state(struct radv_pipeline *pipeline,
     ds->db_depth_bounds_max = fui(vkds->maxDepthBounds);
 }
 
+static uint32_t si_translate_fill(VkPolygonMode func)
+{
+	switch(func) {
+	case VK_POLYGON_MODE_FILL:
+		return V_028814_X_DRAW_TRIANGLES;
+	case VK_POLYGON_MODE_LINE:
+		return V_028814_X_DRAW_LINES;
+	case VK_POLYGON_MODE_POINT:
+		return V_028814_X_DRAW_POINTS;
+	default:
+		assert(0);
+		return V_028814_X_DRAW_POINTS;
+	}
+}
 static void
 radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
 				const VkGraphicsPipelineCreateInfo *pCreateInfo)
@@ -366,8 +380,11 @@ radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
 	S_028BE4_QUANT_MODE(V_028BE4_X_16_8_FIXED_POINT_1_256TH);
 
     raster->pa_su_sc_mode_cntl =
+        S_028814_FACE(vkraster->frontFace) |
 	S_028814_CULL_FRONT(vkraster->cullMode & VK_CULL_MODE_FRONT_BIT) |
-	S_028814_CULL_BACK(vkraster->cullMode & VK_CULL_MODE_BACK_BIT);
+        S_028814_CULL_BACK(vkraster->cullMode & VK_CULL_MODE_BACK_BIT) |
+        S_028814_POLYMODE_FRONT_PTYPE(si_translate_fill(vkraster->polygonMode)) |
+        S_028814_POLYMODE_BACK_PTYPE(si_translate_fill(vkraster->polygonMode));
 }
 VkResult
 radv_pipeline_init(struct radv_pipeline *pipeline,
