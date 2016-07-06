@@ -1389,6 +1389,20 @@ struct radv_shader_variant {
    unsigned rsrc2;
 };
 
+struct radv_depth_stencil_state {
+    uint32_t db_depth_control;
+    uint32_t db_stencil_control;
+    uint32_t db_depth_bounds_min;
+    uint32_t db_depth_bounds_max;
+};
+
+struct radv_blend_state {
+    uint32_t cb_color_control;
+    uint32_t cb_target_mask;
+    uint32_t sx_mrt0_blend_opt[8];
+    uint32_t cb_blend_control[8];
+};
+
 struct radv_pipeline {
    struct radv_device *                          device;
    uint32_t                                     dynamic_state_mask;
@@ -1402,10 +1416,16 @@ struct radv_pipeline {
    struct radv_shader_variant *                 shaders[MESA_SHADER_STAGES];
    VkShaderStageFlags                           active_stages;
 
+   struct radv_depth_stencil_state              depth_stencil;
+
    union {
-      struct {
-         int block_size[3];
-      } compute;
+       struct {
+	   struct radv_blend_state blend;
+           struct radv_depth_stencil_state stencil; 
+       } graphics;
+       struct {
+	   int block_size[3];
+       } compute;
    };
 };
 #if 0

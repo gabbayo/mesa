@@ -191,6 +191,24 @@ radv_bind_compute_pipeline(struct radv_cmd_buffer *cmd_buffer,
                S_00B81C_NUM_THREAD_FULL(pipeline->compute.block_size[2]));
 }
 
+static void
+radv_bind_graphics_blend_state(struct radv_cmd_buffer *cmd_buffer,
+			       struct radv_pipeline *pipeline)
+{
+    radeon_set_context_reg_seq(cmd_buffer->cs, R_028780_CB_BLEND0_CONTROL, 8);
+    radeon_emit_array(cmd_buffer->cs, pipeline->graphics.blend.cb_blend_control,
+		      8);
+}
+
+static void
+radv_bind_graphics_pipeline(struct radv_cmd_buffer *cmd_buffer,
+                           struct radv_pipeline *pipeline)
+{
+   struct radeon_winsys *ws = cmd_buffer->device->ws;
+
+   radv_bind_graphics_blend_state(cmd_buffer, pipeline);
+}
+
 void radv_CmdBindPipeline(
     VkCommandBuffer                             commandBuffer,
     VkPipelineBindPoint                         pipelineBindPoint,
@@ -201,6 +219,9 @@ void radv_CmdBindPipeline(
 
    if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
 	   radv_bind_compute_pipeline(cmd_buffer, pipeline);
+   }
+   if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+	   radv_bind_graphics_pipeline(cmd_buffer, pipeline);
    }
 
 }

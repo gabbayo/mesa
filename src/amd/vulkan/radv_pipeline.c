@@ -241,6 +241,50 @@ radv_pipeline_compile(struct radv_pipeline *pipeline,
 }
 
 
+static void
+radv_pipeline_init_blend_state(struct radv_pipeline *pipeline,
+			       const VkGraphicsPipelineCreateInfo *pCreateInfo)
+{
+    const VkPipelineColorBlendStateCreateInfo *vkblend = pCreateInfo->pColorBlendState;
+    struct radv_blend_state *blend = &pipeline->graphics.blend;
+    unsigned mode = V_028808_CB_NORMAL;
+    int i;
+
+    blend->cb_color_control = 0;
+    if (vkblend->logicOpEnable)
+	blend->cb_color_control |= S_028808_ROP3(vkblend->logicOp | (vkblend->logicOp << 4));
+    else
+	blend->cb_color_control |= S_028808_ROP3(0xcc);
+
+    blend->cb_target_mask = 0;
+    for (i = 0; i < vkblend->attachmentCount; i++) {
+	const VkPipelineColorBlendAttachmentState *att = &vkblend->pAttachments[i];
+	unsigned blend_cntl = 0;
+	blend->sx_mrt0_blend_opt[i] = S_028760_COLOR_COMB_FCN(V_028760_OPT_COMB_BLEND_DISABLED) | S_028760_ALPHA_COMB_FCN(V_028760_OPT_COMB_BLEND_DISABLED);
+
+	if (!att->colorWriteMask)
+	    continue;
+
+	blend->cb_target_mask |= (unsigned)att->colorWriteMask << (4 * i);
+	if (!att->blendEnable) {
+	    blend->cb_blend_control[i] = blend_cntl;
+	    continue;
+	}
+
+	blend_cntl |= S_028780_ENABLE(1);
+
+	blend->cb_blend_control[i] = blend_cntl;
+    }
+    for (i = vkblend->attachmentCount; i < 8; i++)
+	blend->cb_blend_control[i] = 0;
+
+    if (blend->cb_target_mask)
+	blend->cb_color_control |= S_028808_MODE(mode);
+    else
+	blend->cb_color_control |= S_028808_MODE(V_028808_CB_DISABLE);
+
+}
+
 VkResult
 radv_pipeline_init(struct radv_pipeline *pipeline,
                   struct radv_device *device,
@@ -278,6 +322,8 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 			   MESA_SHADER_FRAGMENT,
 			   pStages[MESA_SHADER_FRAGMENT]->pSpecializationInfo);
    }
+
+   radv_pipeline_init_blend_state(pipeline, pCreateInfo);
    //   nir_shader *nir = _pipeline
    return VK_SUCCESS;
 }
