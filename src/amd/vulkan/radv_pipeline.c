@@ -336,6 +336,39 @@ radv_pipeline_init_depth_stencil_state(struct radv_pipeline *pipeline,
     ds->db_depth_bounds_max = fui(vkds->maxDepthBounds);
 }
 
+static void
+radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
+				const VkGraphicsPipelineCreateInfo *pCreateInfo)
+{
+    const VkPipelineRasterizationStateCreateInfo *vkraster = pCreateInfo->pRasterizationState;
+    struct radv_raster_state *raster = &pipeline->graphics.raster;
+
+    memset(raster, 0, sizeof(*raster));
+
+    raster->spi_interp_control =
+	S_0286D4_FLAT_SHADE_ENA(1) |
+	S_0286D4_PNT_SPRITE_ENA(1) |
+	S_0286D4_PNT_SPRITE_OVRD_X(V_0286D4_SPI_PNT_SPRITE_SEL_S) |
+	S_0286D4_PNT_SPRITE_OVRD_Y(V_0286D4_SPI_PNT_SPRITE_SEL_T) |
+	S_0286D4_PNT_SPRITE_OVRD_Z(V_0286D4_SPI_PNT_SPRITE_SEL_0) |
+	S_0286D4_PNT_SPRITE_OVRD_W(V_0286D4_SPI_PNT_SPRITE_SEL_1) |
+	S_0286D4_PNT_SPRITE_TOP_1(1); // TODO verify
+
+    raster->pa_cl_clip_cntl = S_028810_PS_UCP_MODE(3) |
+	S_028810_DX_CLIP_SPACE_DEF(1) | // TODO verify
+	S_028810_ZCLIP_NEAR_DISABLE(!vkraster->depthClampEnable) |
+	S_028810_ZCLIP_FAR_DISABLE(!vkraster->depthClampEnable) |
+	S_028810_DX_RASTERIZATION_KILL(vkraster->rasterizerDiscardEnable) |
+	S_028810_DX_LINEAR_ATTR_CLIP_ENA(1);
+
+    raster->pa_su_vtx_cntl =
+	S_028BE4_PIX_CENTER(1) | // TODO verify
+	S_028BE4_QUANT_MODE(V_028BE4_X_16_8_FIXED_POINT_1_256TH);
+
+    raster->pa_su_sc_mode_cntl =
+	S_028814_CULL_FRONT(vkraster->cullMode & VK_CULL_MODE_FRONT_BIT) |
+	S_028814_CULL_BACK(vkraster->cullMode & VK_CULL_MODE_BACK_BIT);
+}
 VkResult
 radv_pipeline_init(struct radv_pipeline *pipeline,
                   struct radv_device *device,
@@ -376,6 +409,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 
    radv_pipeline_init_blend_state(pipeline, pCreateInfo);
    radv_pipeline_init_depth_stencil_state(pipeline, pCreateInfo);
+   radv_pipeline_init_raster_state(pipeline, pCreateInfo);
    //   nir_shader *nir = _pipeline
    return VK_SUCCESS;
 }

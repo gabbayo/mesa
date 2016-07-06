@@ -1403,6 +1403,22 @@ struct radv_blend_state {
     uint32_t cb_blend_control[8];
 };
 
+struct radv_raster_state {
+    uint32_t pa_cl_clip_cntl;
+    uint32_t spi_interp_control;
+    uint32_t pa_su_point_size;
+    uint32_t pa_su_point_minmax;
+    uint32_t pa_su_line_cntl;
+    uint32_t pa_sc_mode_cntl_0;
+    uint32_t pa_su_vtx_cntl;
+    uint32_t pa_su_poly_offset_clamp;
+    uint32_t pa_su_sc_mode_cntl;
+    uint32_t pa_su_poly_offset_front_scale;
+    uint32_t pa_su_poly_offset_front_offset;
+    uint32_t pa_su_poly_offset_back_scale;
+    uint32_t pa_su_poly_offset_back_offset;
+};
+
 struct radv_pipeline {
    struct radv_device *                          device;
    uint32_t                                     dynamic_state_mask;
@@ -1422,6 +1438,7 @@ struct radv_pipeline {
        struct {
 	   struct radv_blend_state blend;
 	   struct radv_depth_stencil_state ds;
+	   struct radv_raster_state raster;
       } graphics;
        struct {
 	   int block_size[3];

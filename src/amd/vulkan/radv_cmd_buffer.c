@@ -212,6 +212,40 @@ radv_bind_graphics_depth_stencil_state(struct radv_cmd_buffer *cmd_buffer,
 }
 
 static void
+radv_bind_graphics_raster_state(struct radv_cmd_buffer *cmd_buffer,
+				struct radv_pipeline *pipeline)
+{
+    struct radv_raster_state *raster = &pipeline->graphics.raster;
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028810_PA_CL_CLIP_CNTL,
+			   raster->pa_cl_clip_cntl);
+    radeon_set_context_reg(cmd_buffer->cs, R_028814_PA_SU_SC_MODE_CNTL,
+			   raster->pa_su_sc_mode_cntl);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_0286D4_SPI_INTERP_CONTROL_0,
+			   raster->spi_interp_control);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028A00_PA_SU_POINT_SIZE,
+			   0);
+    radeon_set_context_reg(cmd_buffer->cs, R_028A04_PA_SU_POINT_MINMAX,
+			   0);
+    radeon_set_context_reg(cmd_buffer->cs, R_028A08_PA_SU_LINE_CNTL,
+			   0);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028A48_PA_SC_MODE_CNTL_0,
+			   raster->pa_sc_mode_cntl_0);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028BE4_PA_SU_VTX_CNTL,
+			   raster->pa_su_vtx_cntl);
+
+    radeon_set_context_reg_seq(cmd_buffer->cs, R_028B80_PA_SU_POLY_OFFSET_FRONT_SCALE, 4);
+    radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_front_scale);
+    radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_front_offset);
+    radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_back_scale);
+    radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_back_offset);
+}
+
+static void
 radv_bind_graphics_pipeline(struct radv_cmd_buffer *cmd_buffer,
                            struct radv_pipeline *pipeline)
 {
@@ -219,6 +253,7 @@ radv_bind_graphics_pipeline(struct radv_cmd_buffer *cmd_buffer,
 
    radv_bind_graphics_depth_stencil_state(cmd_buffer, pipeline);
    radv_bind_graphics_blend_state(cmd_buffer, pipeline);
+   radv_bind_graphics_raster_state(cmd_buffer, pipeline);
 }
 
 void radv_CmdBindPipeline(
