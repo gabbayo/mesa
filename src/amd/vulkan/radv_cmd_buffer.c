@@ -129,9 +129,27 @@ void radv_CmdBindDescriptorSets(
     uint32_t                                    dynamicOffsetCount,
     const uint32_t*                             pDynamicOffsets)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-  //   RADV_FROM_HANDLE(radv_pipeline_layout, layout, _layout);
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+   RADV_FROM_HANDLE(radv_pipeline_layout, layout, _layout);
+   struct radeon_winsys *ws = cmd_buffer->device->ws;
 
+   for (unsigned i = 0; i < descriptorSetCount; ++i) {
+      unsigned idx = i + firstSet;
+      RADV_FROM_HANDLE(radv_descriptor_set, set, pDescriptorSets[i]);
+      uint64_t va = ws->buffer_get_va(set->bo.bo);
+
+      for (unsigned j = 0; j < set->layout->buffer_count; ++j)
+         if (set->descriptors[j])
+            ws->cs_add_buffer(cmd_buffer->cs, set->descriptors[j]->bo, 7);
+
+      radeon_set_sh_reg_seq(cmd_buffer->cs,
+                                     R_00B900_COMPUTE_USER_DATA_0 + 8 * idx, 2);
+      radeon_emit(cmd_buffer->cs, va);
+      radeon_emit(cmd_buffer->cs, va >> 32);
+
+      if(!set->bo.bo) abort();
+      ws->cs_add_buffer(cmd_buffer->cs, set->bo.bo, 8);
+   }
 }
 
 VkResult radv_EndCommandBuffer(
