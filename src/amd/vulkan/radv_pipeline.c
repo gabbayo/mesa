@@ -395,7 +395,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
                   const VkAllocationCallbacks *alloc)
 {
    VkResult result;
-
+   struct nir_shader *shader;
    if (alloc == NULL)
      alloc = &device->alloc;
 
@@ -411,17 +411,21 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 
    /* */
    if (modules[MESA_SHADER_VERTEX]) {
-     radv_pipeline_compile(pipeline, modules[MESA_SHADER_VERTEX],
+     shader = radv_pipeline_compile(pipeline, modules[MESA_SHADER_VERTEX],
 			   pStages[MESA_SHADER_VERTEX]->pName,
 			   MESA_SHADER_VERTEX,
 			   pStages[MESA_SHADER_VERTEX]->pSpecializationInfo);
+     pipeline->shaders[MESA_SHADER_VERTEX] = radv_shader_variant_create(device,
+									shader);
    }
 
    if (modules[MESA_SHADER_FRAGMENT]) {
-     radv_pipeline_compile(pipeline, modules[MESA_SHADER_FRAGMENT],
+     shader = radv_pipeline_compile(pipeline, modules[MESA_SHADER_FRAGMENT],
 			   pStages[MESA_SHADER_FRAGMENT]->pName,
 			   MESA_SHADER_FRAGMENT,
 			   pStages[MESA_SHADER_FRAGMENT]->pSpecializationInfo);
+     pipeline->shaders[MESA_SHADER_VERTEX] = radv_shader_variant_create(device,
+									shader);
    }
 
    radv_pipeline_init_blend_state(pipeline, pCreateInfo);
