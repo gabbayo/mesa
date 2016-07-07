@@ -2,13 +2,77 @@
 #include "radv_radeon_winsys.h"
 #include "radv_cs.h"
 #include "sid.h"
+#include "vk_format.h"
+
+const struct radv_dynamic_state default_dynamic_state = {
+   .viewport = {
+      .count = 0,
+   },
+   .scissor = {
+      .count = 0,
+   },
+   .line_width = 1.0f,
+   .depth_bias = {
+      .bias = 0.0f,
+      .clamp = 0.0f,
+      .slope = 0.0f,
+   },
+   .blend_constants = { 0.0f, 0.0f, 0.0f, 0.0f },
+   .depth_bounds = {
+      .min = 0.0f,
+      .max = 1.0f,
+   },
+   .stencil_compare_mask = {
+      .front = ~0u,
+      .back = ~0u,
+   },
+   .stencil_write_mask = {
+      .front = ~0u,
+      .back = ~0u,
+   },
+   .stencil_reference = {
+      .front = 0u,
+      .back = 0u,
+   },
+};
 
 void
 radv_dynamic_state_copy(struct radv_dynamic_state *dest,
                        const struct radv_dynamic_state *src,
                        uint32_t copy_mask)
 {
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_VIEWPORT)) {
+      dest->viewport.count = src->viewport.count;
+      typed_memcpy(dest->viewport.viewports, src->viewport.viewports,
+                   src->viewport.count);
+   }
 
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_SCISSOR)) {
+      dest->scissor.count = src->scissor.count;
+      typed_memcpy(dest->scissor.scissors, src->scissor.scissors,
+                   src->scissor.count);
+   }
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_LINE_WIDTH))
+      dest->line_width = src->line_width;
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_DEPTH_BIAS))
+      dest->depth_bias = src->depth_bias;
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_BLEND_CONSTANTS))
+      typed_memcpy(dest->blend_constants, src->blend_constants, 4);
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_DEPTH_BOUNDS))
+      dest->depth_bounds = src->depth_bounds;
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK))
+      dest->stencil_compare_mask = src->stencil_compare_mask;
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_STENCIL_WRITE_MASK))
+      dest->stencil_write_mask = src->stencil_write_mask;
+
+   if (copy_mask & (1 << VK_DYNAMIC_STATE_STENCIL_REFERENCE))
+      dest->stencil_reference = src->stencil_reference;
 }
 
 static VkResult radv_create_cmd_buffer(
@@ -205,6 +269,65 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
     radv_cmd_buffer_flush_dynamic_state(cmd_buffer);
 }
 
+static void
+radv_cmd_buffer_set_subpass(struct radv_cmd_buffer *cmd_buffer,
+                            struct radv_subpass *subpass)
+{
+    cmd_buffer->state.subpass = subpass;
+}
+
+static void
+radv_cmd_state_setup_attachments(struct radv_cmd_buffer *cmd_buffer,
+                                 const VkRenderPassBeginInfo *info)
+{
+    struct radv_cmd_state *state = &cmd_buffer->state;
+    RADV_FROM_HANDLE(radv_render_pass, pass, info->renderPass);
+
+    radv_free(&cmd_buffer->pool->alloc, state->attachments);
+
+    if (pass->attachment_count == 0) {
+      state->attachments = NULL;
+      return;
+    }
+
+    state->attachments = radv_alloc(&cmd_buffer->pool->alloc,
+                                    pass->attachment_count *
+                                    sizeof(state->attachments[0]),
+                                    8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+    if (state->attachments == NULL) {
+        /* FIXME: Propagate VK_ERROR_OUT_OF_HOST_MEMORY to vkEndCommandBuffer */
+        abort();
+    }
+
+    for (uint32_t i = 0; i < pass->attachment_count; ++i) {
+        struct radv_render_pass_attachment *att = &pass->attachments[i];
+        VkImageAspectFlags att_aspects = vk_format_aspects(att->format);
+        VkImageAspectFlags clear_aspects = 0;
+
+        if (att_aspects == VK_IMAGE_ASPECT_COLOR_BIT) {
+            /* color attachment */
+            if (att->load_op == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+                clear_aspects |= VK_IMAGE_ASPECT_COLOR_BIT;
+            }
+        } else {
+            /* depthstencil attachment */
+            if ((att_aspects & VK_IMAGE_ASPECT_DEPTH_BIT) &&
+                att->load_op == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+                clear_aspects |= VK_IMAGE_ASPECT_DEPTH_BIT;
+            }
+            if ((att_aspects & VK_IMAGE_ASPECT_STENCIL_BIT) &&
+                att->stencil_load_op == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+                clear_aspects |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            }
+        }
+
+        state->attachments[i].pending_clear_aspects = clear_aspects;
+        if (clear_aspects) {
+            assert(info->clearValueCount > i);
+            state->attachments[i].clear_value = info->pClearValues[i];
+        }
+    }
+}
 
 VkResult radv_AllocateCommandBuffers(
     VkDevice                                    _device,
@@ -599,10 +722,17 @@ void radv_CmdBeginRenderPass(
     const VkRenderPassBeginInfo*                pRenderPassBegin,
     VkSubpassContents                           contents)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-  // RADV_FROM_HANDLE(radv_render_pass, pass, pRenderPassBegin->renderPass);
-  //RADV_FROM_HANDLE(radv_framebuffer, framebuffer, pRenderPassBegin->framebuffer);
+    RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+    RADV_FROM_HANDLE(radv_render_pass, pass, pRenderPassBegin->renderPass);
+    RADV_FROM_HANDLE(radv_framebuffer, framebuffer, pRenderPassBegin->framebuffer);
 
+    cmd_buffer->state.framebuffer = framebuffer;
+    cmd_buffer->state.pass = pass;
+    cmd_buffer->state.render_area = pRenderPassBegin->renderArea;
+    radv_cmd_state_setup_attachments(cmd_buffer, pRenderPassBegin);
+
+    radv_cmd_buffer_set_subpass(cmd_buffer, pass->subpasses);
+    radv_cmd_buffer_clear_subpass(cmd_buffer);
 }
 
 void radv_CmdDraw(

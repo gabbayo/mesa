@@ -118,8 +118,22 @@ radv_image_view_init(struct radv_image_view *iview,
 		     struct radv_cmd_buffer *cmd_buffer,
 		     VkImageUsageFlags usage_mask)
 {
-
-
+   RADV_FROM_HANDLE(radv_image, image, pCreateInfo->image);
+   switch (image->type) {
+   default:
+      unreachable("bad VkImageType");
+   case VK_IMAGE_TYPE_1D:
+   case VK_IMAGE_TYPE_2D:
+      assert(range->baseArrayLayer + radv_get_layerCount(image, range) - 1 <= image->array_size);
+      break;
+   case VK_IMAGE_TYPE_3D:
+      assert(range->baseArrayLayer + radv_get_layerCount(image, range) - 1
+             <= radv_minify(image->extent.depth, range->baseMipLevel));
+      break;
+   }
+   iview->image = image;
+   iview->bo = image->bo;
+   iview->vk_format = pCreateInfo->format;
 }
 
 VkResult

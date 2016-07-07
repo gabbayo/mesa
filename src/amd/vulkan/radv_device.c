@@ -567,9 +567,15 @@ VkResult radv_CreateDevice(
 
    device->target_machine = ac_create_target_machine(chip_family);
    radv_queue_init(device, &device->queue);
+
+   result = radv_device_init_meta(device);
+   if (result != VK_SUCCESS)
+      goto fail;
+
    *pDevice = radv_device_to_handle(device);
    return VK_SUCCESS;
-   
+ fail:
+   return result;
 }
 
 void radv_DestroyDevice(
@@ -580,6 +586,8 @@ void radv_DestroyDevice(
 
    LLVMDisposeTargetMachine(device->target_machine);
    radv_queue_finish(&device->queue);
+   radv_device_finish_meta(device);
+
    radv_free(&device->alloc, device);
 }
 
