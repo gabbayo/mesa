@@ -386,6 +386,39 @@ radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
         S_028814_POLYMODE_FRONT_PTYPE(si_translate_fill(vkraster->polygonMode)) |
         S_028814_POLYMODE_BACK_PTYPE(si_translate_fill(vkraster->polygonMode));
 }
+
+static uint32_t
+si_translate_prim(enum VkPrimitiveTopology topology)
+{
+    switch (topology) {
+    case VK_PRIMITIVE_TOPOLOGY_POINT_LIST:
+        return V_008958_DI_PT_POINTLIST;
+    case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
+        return V_008958_DI_PT_LINELIST;
+    case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
+        return V_008958_DI_PT_LINESTRIP;
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
+        return V_008958_DI_PT_TRILIST;
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
+        return V_008958_DI_PT_TRISTRIP;
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN:
+        return V_008958_DI_PT_TRIFAN;
+    case VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY:
+        return V_008958_DI_PT_LINELIST_ADJ;
+    case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY:
+        return V_008958_DI_PT_LINESTRIP_ADJ;
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY:
+        return V_008958_DI_PT_TRILIST_ADJ;
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY:
+        return V_008958_DI_PT_TRISTRIP_ADJ;
+    case VK_PRIMITIVE_TOPOLOGY_PATCH_LIST:
+        return V_008958_DI_PT_PATCH;
+    default:
+        assert(0);
+        return 0;
+    }
+}
+
 VkResult
 radv_pipeline_init(struct radv_pipeline *pipeline,
                   struct radv_device *device,
@@ -431,6 +464,9 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
    radv_pipeline_init_blend_state(pipeline, pCreateInfo);
    radv_pipeline_init_depth_stencil_state(pipeline, pCreateInfo);
    radv_pipeline_init_raster_state(pipeline, pCreateInfo);
+
+   pipeline->graphics.prim = si_translate_prim(pCreateInfo->pInputAssemblyState->topology);
+
    //   nir_shader *nir = _pipeline
    return VK_SUCCESS;
 }

@@ -1446,13 +1446,12 @@ struct radv_pipeline {
    struct radv_shader_variant *                 shaders[MESA_SHADER_STAGES];
    VkShaderStageFlags                           active_stages;
 
-   struct radv_depth_stencil_state              depth_stencil;
-
    union {
        struct {
 	   struct radv_blend_state blend;
 	   struct radv_depth_stencil_state ds;
 	   struct radv_raster_state raster;
+           unsigned prim;
       } graphics;
        struct {
 	   int block_size[3];
