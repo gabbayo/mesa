@@ -1029,24 +1029,26 @@ struct radv_buffer {
    struct radv_bo *                              bo;
    VkDeviceSize                                 offset;
 };
-#if 0
 
-enum anv_cmd_dirty_bits {
-   ANV_CMD_DIRTY_DYNAMIC_VIEWPORT                  = 1 << 0, /* VK_DYNAMIC_STATE_VIEWPORT */
-   ANV_CMD_DIRTY_DYNAMIC_SCISSOR                   = 1 << 1, /* VK_DYNAMIC_STATE_SCISSOR */
-   ANV_CMD_DIRTY_DYNAMIC_LINE_WIDTH                = 1 << 2, /* VK_DYNAMIC_STATE_LINE_WIDTH */
-   ANV_CMD_DIRTY_DYNAMIC_DEPTH_BIAS                = 1 << 3, /* VK_DYNAMIC_STATE_DEPTH_BIAS */
-   ANV_CMD_DIRTY_DYNAMIC_BLEND_CONSTANTS           = 1 << 4, /* VK_DYNAMIC_STATE_BLEND_CONSTANTS */
-   ANV_CMD_DIRTY_DYNAMIC_DEPTH_BOUNDS              = 1 << 5, /* VK_DYNAMIC_STATE_DEPTH_BOUNDS */
-   ANV_CMD_DIRTY_DYNAMIC_STENCIL_COMPARE_MASK      = 1 << 6, /* VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK */
-   ANV_CMD_DIRTY_DYNAMIC_STENCIL_WRITE_MASK        = 1 << 7, /* VK_DYNAMIC_STATE_STENCIL_WRITE_MASK */
-   ANV_CMD_DIRTY_DYNAMIC_STENCIL_REFERENCE         = 1 << 8, /* VK_DYNAMIC_STATE_STENCIL_REFERENCE */
-   ANV_CMD_DIRTY_DYNAMIC_ALL                       = (1 << 9) - 1,
-   ANV_CMD_DIRTY_PIPELINE                          = 1 << 9,
-   ANV_CMD_DIRTY_INDEX_BUFFER                      = 1 << 10,
-   ANV_CMD_DIRTY_RENDER_TARGETS                    = 1 << 11,
+
+enum radv_cmd_dirty_bits {
+   RADV_CMD_DIRTY_DYNAMIC_VIEWPORT                  = 1 << 0, /* VK_DYNAMIC_STATE_VIEWPORT */
+   RADV_CMD_DIRTY_DYNAMIC_SCISSOR                   = 1 << 1, /* VK_DYNAMIC_STATE_SCISSOR */
+   RADV_CMD_DIRTY_DYNAMIC_LINE_WIDTH                = 1 << 2, /* VK_DYNAMIC_STATE_LINE_WIDTH */
+   RADV_CMD_DIRTY_DYNAMIC_DEPTH_BIAS                = 1 << 3, /* VK_DYNAMIC_STATE_DEPTH_BIAS */
+   RADV_CMD_DIRTY_DYNAMIC_BLEND_CONSTANTS           = 1 << 4, /* VK_DYNAMIC_STATE_BLEND_CONSTANTS */
+   RADV_CMD_DIRTY_DYNAMIC_DEPTH_BOUNDS              = 1 << 5, /* VK_DYNAMIC_STATE_DEPTH_BOUNDS */
+   RADV_CMD_DIRTY_DYNAMIC_STENCIL_COMPARE_MASK      = 1 << 6, /* VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK */
+   RADV_CMD_DIRTY_DYNAMIC_STENCIL_WRITE_MASK        = 1 << 7, /* VK_DYNAMIC_STATE_STENCIL_WRITE_MASK */
+   RADV_CMD_DIRTY_DYNAMIC_STENCIL_REFERENCE         = 1 << 8, /* VK_DYNAMIC_STATE_STENCIL_REFERENCE */
+   RADV_CMD_DIRTY_DYNAMIC_ALL                       = (1 << 9) - 1,
+   RADV_CMD_DIRTY_PIPELINE                          = 1 << 9,
+   RADV_CMD_DIRTY_INDEX_BUFFER                      = 1 << 10,
+   RADV_CMD_DIRTY_RENDER_TARGETS                    = 1 << 11,
 };
-typedef uint32_t anv_cmd_dirty_mask_t;
+typedef uint32_t radv_cmd_dirty_mask_t;
+
+#if 0
 
 enum anv_pipe_bits {
    ANV_PIPE_DEPTH_CACHE_FLUSH_BIT            = (1 << 0),
@@ -1223,20 +1225,21 @@ struct anv_cmd_state {
 #endif
 
 struct radv_cmd_state {
-   uint32_t                                     vb_dirty;
-  uint32_t dirty;
-   struct radv_pipeline *                        pipeline;
-   struct radv_pipeline *                        compute_pipeline;
-   struct radv_framebuffer *                     framebuffer;
-   struct radv_render_pass *                     pass;
-   struct radv_subpass *                         subpass;
-   struct radv_dynamic_state                     dynamic;
-   struct radv_vertex_binding                    vertex_bindings[MAX_VBS];
-   struct radv_descriptor_set *                  descriptors[MAX_SETS];
-   VkShaderStageFlags                           descriptors_dirty;
+    uint32_t                                     vb_dirty;
+    radv_cmd_dirty_mask_t                         dirty;
+    radv_cmd_dirty_mask_t                         compute_dirty;
 
-   struct radv_attachment_state *                attachments;
-   VkRect2D                                     render_area;
+    struct radv_pipeline *                        pipeline;
+    struct radv_pipeline *                        compute_pipeline;
+    struct radv_framebuffer *                     framebuffer;
+    struct radv_render_pass *                     pass;
+    struct radv_subpass *                         subpass;
+    struct radv_dynamic_state                     dynamic;
+    struct radv_vertex_binding                    vertex_bindings[MAX_VBS];
+    struct radv_descriptor_set *                  descriptors[MAX_SETS];
+    VkShaderStageFlags                           descriptors_dirty;
+    struct radv_attachment_state *                attachments;
+    VkRect2D                                     render_area;
 };
 struct radv_cmd_pool {
    VkAllocationCallbacks                        alloc;
@@ -1435,8 +1438,8 @@ struct radv_raster_state {
 
 struct radv_pipeline {
    struct radv_device *                          device;
-   uint32_t                                     dynamic_state_mask;
-  //   struct radv_dynamic_state                     dynamic_state;
+    uint32_t                                     dynamic_state_mask;
+    struct radv_dynamic_state                     dynamic_state;
 
   //   struct radv_pipeline_layout *                 layout;
 
