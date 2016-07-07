@@ -52,12 +52,16 @@ struct nir_to_llvm_context {
 	LLVMBasicBlockRef break_block;
 
 	LLVMTypeRef i1;
+	LLVMTypeRef i8;
 	LLVMTypeRef i32;
 	LLVMTypeRef v4i32;
 	LLVMTypeRef f32;
+	LLVMTypeRef v16i8;
 
 	unsigned uniform_md_kind;
 	LLVMValueRef empty_md;
+	LLVMValueRef const_md;
+	gl_shader_stage stage;
 };
 
 static void set_llvm_calling_convention(LLVMValueRef func,
@@ -130,6 +134,27 @@ static LLVMTypeRef const_array(LLVMTypeRef elem_type, int num_elements)
 	                       CONST_ADDR_SPACE);
 }
 
+static LLVMValueRef build_indexed_load(struct nir_to_llvm_context *ctx,
+				       LLVMValueRef base_ptr, LLVMValueRef index,
+				       bool uniform)
+{
+	LLVMValueRef pointer;
+	LLVMValueRef indices[] = {LLVMConstInt(ctx->i32, 0, false), index};
+
+	pointer = LLVMBuildGEP(ctx->builder, base_ptr, indices, 2, "");
+	if (uniform)
+		LLVMSetMetadata(pointer, ctx->uniform_md_kind, ctx->empty_md);
+	return LLVMBuildLoad(ctx->builder, pointer, "");
+}
+
+static LLVMValueRef build_indexed_load_const(struct nir_to_llvm_context *ctx,
+					     LLVMValueRef base_ptr, LLVMValueRef index)
+{
+	LLVMValueRef result = build_indexed_load(ctx, base_ptr, index, true);
+	LLVMSetMetadata(result, 1, ctx->const_md);
+	return result;
+}
+
 static void create_function(struct nir_to_llvm_context *ctx,
                             struct nir_shader *nir)
 {
@@ -178,10 +203,18 @@ static void create_function(struct nir_to_llvm_context *ctx,
 
 static void setup_types(struct nir_to_llvm_context *ctx)
 {
+	LLVMValueRef args[3];
 	ctx->i1 = LLVMIntTypeInContext(ctx->context, 1);
+	ctx->i8 = LLVMIntTypeInContext(ctx->context, 8);
 	ctx->i32 = LLVMIntTypeInContext(ctx->context, 32);
 	ctx->v4i32 = LLVMVectorType(ctx->i32, 4);
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
+	ctx->v16i8 = LLVMVectorType(ctx->i8, 16);
+
+	args[0] = LLVMMDStringInContext(ctx->context, "const", 5);
+	args[1] = 0;
+	args[2] = LLVMConstInt(ctx->i32, 1, 0);
+	ctx->const_md = LLVMMDNodeInContext(ctx->context, args, 3);
 
 	ctx->uniform_md_kind =
 	    LLVMGetMDKindIDInContext(ctx->context, "amdgpu.uniform", 14);
