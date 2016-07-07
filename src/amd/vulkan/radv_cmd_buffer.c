@@ -254,6 +254,54 @@ radv_bind_graphics_raster_state(struct radv_cmd_buffer *cmd_buffer,
 }
 
 static void
+radv_bind_vertex_shader(struct radv_cmd_buffer *cmd_buffer,
+			struct radv_pipeline *pipeline)
+{
+    struct radeon_winsys *ws = cmd_buffer->device->ws;
+    struct radv_shader_variant *vs;
+    uint64_t va;
+
+    assert (pipeline->shaders[MESA_SHADER_VERTEX]);
+
+    vs = pipeline->shaders[MESA_SHADER_VERTEX];
+    va = ws->buffer_get_va(vs->bo);
+    ws->cs_add_buffer(cmd_buffer->cs, vs->bo, 8);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028A40_VGT_GS_MODE, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_028A84_VGT_PRIMITIVEID_EN, 0);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_0286C4_SPI_VS_OUT_CONFIG, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_02870C_SPI_SHADER_POS_FORMAT, 0);
+
+    radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B120_SPI_SHADER_PGM_LO_VS, 4);
+    radeon_emit(cmd_buffer->cs, va >> 8);
+    radeon_emit(cmd_buffer->cs, va >> 40);
+    radeon_emit(cmd_buffer->cs, vs->rsrc1);
+    radeon_emit(cmd_buffer->cs, vs->rsrc2);
+}
+
+static void
+radv_bind_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
+			  struct radv_pipeline *pipeline)
+{
+    struct radeon_winsys *ws = cmd_buffer->device->ws;
+    struct radv_shader_variant *ps;
+    uint64_t va;
+
+    assert (pipeline->shaders[MESA_SHADER_FRAGMENT]);
+
+    ps = pipeline->shaders[MESA_SHADER_FRAGMENT];
+    va = ws->buffer_get_va(ps->bo);
+    ws->cs_add_buffer(cmd_buffer->cs, ps->bo, 8);
+
+    radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B020_SPI_SHADER_PGM_LO_PS, 4);
+    radeon_emit(cmd_buffer->cs, va >> 8);
+    radeon_emit(cmd_buffer->cs, va >> 40);
+    radeon_emit(cmd_buffer->cs, ps->rsrc1);
+    radeon_emit(cmd_buffer->cs, ps->rsrc2);
+}
+
+static void
 radv_bind_graphics_pipeline(struct radv_cmd_buffer *cmd_buffer,
                            struct radv_pipeline *pipeline)
 {
@@ -262,6 +310,9 @@ radv_bind_graphics_pipeline(struct radv_cmd_buffer *cmd_buffer,
    radv_bind_graphics_depth_stencil_state(cmd_buffer, pipeline);
    radv_bind_graphics_blend_state(cmd_buffer, pipeline);
    radv_bind_graphics_raster_state(cmd_buffer, pipeline);
+
+   radv_bind_vertex_shader(cmd_buffer, pipeline);
+   radv_bind_fragment_shader(cmd_buffer, pipeline);
 }
 
 void radv_CmdBindPipeline(

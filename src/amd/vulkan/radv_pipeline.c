@@ -424,7 +424,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 			   pStages[MESA_SHADER_FRAGMENT]->pName,
 			   MESA_SHADER_FRAGMENT,
 			   pStages[MESA_SHADER_FRAGMENT]->pSpecializationInfo);
-     pipeline->shaders[MESA_SHADER_VERTEX] = radv_shader_variant_create(device,
+     pipeline->shaders[MESA_SHADER_FRAGMENT] = radv_shader_variant_create(device,
 									shader);
    }
 
