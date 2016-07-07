@@ -180,6 +180,7 @@ radv_shader_compile_to_nir(struct radv_device *device,
 
    nir_lower_indirect_derefs(nir, indirect_mask);
    nir_lower_vars_to_ssa(nir);
+   nir_lower_var_copies(nir);
    return nir;
 }
 

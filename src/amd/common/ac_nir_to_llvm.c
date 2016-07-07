@@ -23,9 +23,9 @@
 
 #include "ac_nir_to_llvm.h"
 #include "ac_binary.h"
-
+#include "sid.h"
 #include "nir/nir.h"
-
+#include <llvm-c/Transforms/Scalar.h>
 enum radeon_llvm_calling_convention {
 	RADEON_LLVM_AMDGPU_VS = 87,
 	RADEON_LLVM_AMDGPU_GS = 88,
@@ -35,6 +35,9 @@ enum radeon_llvm_calling_convention {
 
 #define CONST_ADDR_SPACE 2
 #define LOCAL_ADDR_SPACE 3
+
+#define RADEON_LLVM_MAX_INPUTS 32 * 4
+#define RADEON_LLVM_MAX_OUTPUTS 32
 
 struct nir_to_llvm_context {
 	LLVMContextRef context;
@@ -48,21 +51,41 @@ struct nir_to_llvm_context {
 	LLVMValueRef workgroup_ids;
 	LLVMValueRef local_invocation_ids;
 
+	LLVMValueRef vertex_buffers;
+	LLVMValueRef vertex_id;
+	LLVMValueRef base_vertex;
 	LLVMBasicBlockRef continue_block;
 	LLVMBasicBlockRef break_block;
 
 	LLVMTypeRef i1;
 	LLVMTypeRef i8;
+	LLVMTypeRef i16;
 	LLVMTypeRef i32;
 	LLVMTypeRef v4i32;
 	LLVMTypeRef f32;
+	LLVMTypeRef v4f32;
 	LLVMTypeRef v16i8;
 
 	unsigned uniform_md_kind;
 	LLVMValueRef empty_md;
 	LLVMValueRef const_md;
 	gl_shader_stage stage;
+
+	LLVMValueRef inputs[RADEON_LLVM_MAX_INPUTS];
+	LLVMValueRef outputs[RADEON_LLVM_MAX_OUTPUTS][4];
+	int num_inputs;
+	int num_outputs;
 };
+
+struct si_shader_output_values
+{
+	LLVMValueRef values[4];
+};
+
+static unsigned radeon_llvm_reg_index_soa(unsigned index, unsigned chan)
+{
+	return (index * 4) + chan;
+}
 
 static void set_llvm_calling_convention(LLVMValueRef func,
                                         gl_shader_stage stage)
@@ -174,6 +197,12 @@ static void create_function(struct nir_to_llvm_context *ctx,
 
 		arg_types[arg_idx++] = LLVMVectorType(ctx->i32, 3);
 		break;
+	case MESA_SHADER_VERTEX:
+		arg_types[arg_idx++] = const_array(ctx->v16i8, 16);
+		arg_types[arg_idx++] = ctx->i32; // base vertex
+		sgpr_count = arg_idx;
+		arg_types[arg_idx++] = ctx->i32;
+		break;
 	default:
 		unreachable("Shader stage not implemented");
 	}
@@ -196,6 +225,11 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		ctx->local_invocation_ids =
 		    LLVMGetParam(ctx->main_function, arg_idx++);
 		break;
+	case MESA_SHADER_VERTEX:
+		ctx->vertex_buffers = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->base_vertex = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->vertex_id = LLVMGetParam(ctx->main_function, arg_idx++);
+		break;
 	default:
 		unreachable("Shader stage not implemented");
 	}
@@ -206,9 +240,11 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	LLVMValueRef args[3];
 	ctx->i1 = LLVMIntTypeInContext(ctx->context, 1);
 	ctx->i8 = LLVMIntTypeInContext(ctx->context, 8);
+	ctx->i16 = LLVMIntTypeInContext(ctx->context, 16);
 	ctx->i32 = LLVMIntTypeInContext(ctx->context, 32);
 	ctx->v4i32 = LLVMVectorType(ctx->i32, 4);
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
+	ctx->v4f32 = LLVMVectorType(ctx->f32, 4);
 	ctx->v16i8 = LLVMVectorType(ctx->i8, 16);
 
 	args[0] = LLVMMDStringInContext(ctx->context, "const", 5);
@@ -505,6 +541,65 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 	                        get_def_type(ctx, &instr->dest.ssa), "");
 }
 
+static LLVMValueRef
+build_gather_values(struct nir_to_llvm_context *ctx,
+		    LLVMValueRef *values,
+		    unsigned value_count)
+{
+	LLVMTypeRef vec_type = LLVMVectorType(LLVMTypeOf(values[0]), value_count);
+	LLVMBuilderRef builder = ctx->builder;
+	LLVMValueRef vec = LLVMGetUndef(vec_type);
+	unsigned i;
+
+	for (i = 0; i < value_count; i++) {
+		LLVMValueRef index = LLVMConstInt(ctx->i32, i, false);
+		vec = LLVMBuildInsertElement(builder, vec, values[i], index, "");
+	}
+	return vec;
+}
+
+static LLVMValueRef visit_load_var(struct nir_to_llvm_context *ctx,
+				   nir_intrinsic_instr *instr)
+{
+	LLVMValueRef values[4];
+	int idx = instr->variables[0]->var->data.driver_location;
+	switch (instr->variables[0]->var->data.mode) {
+	case nir_var_shader_in:
+		for (unsigned chan = 0; chan < 4; chan++) {
+			values[chan] = ctx->inputs[radeon_llvm_reg_index_soa(idx, chan)];
+		}
+		return build_gather_values(ctx, values, 4);
+		break;
+	default:
+		break;
+	}
+	return NULL;
+}
+
+static void
+visit_store_var(struct nir_to_llvm_context *ctx,
+				   nir_intrinsic_instr *instr)
+{
+	LLVMValueRef temp_ptr, value;
+	int idx = instr->variables[0]->var->data.driver_location;
+	LLVMValueRef src = get_src(ctx, instr->src[0]);
+	int writemask = instr->const_index[0];
+	switch (instr->variables[0]->var->data.mode) {
+	case nir_var_shader_out:
+		for (unsigned chan = 0; chan < 4; chan++) {
+			if (writemask & (1 << chan)) {
+				temp_ptr = ctx->outputs[idx][chan];
+
+				value = LLVMBuildExtractElement(ctx->builder, src, LLVMConstInt(ctx->i32, chan, false), "");
+				LLVMBuildStore(ctx->builder, value, temp_ptr);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 static void visit_intrinsic(struct nir_to_llvm_context *ctx,
                             nir_intrinsic_instr *instr)
 {
@@ -531,6 +626,12 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 		break;
 	case nir_intrinsic_load_ubo:
 		result = visit_load_buffer(ctx, instr);
+		break;
+	case nir_intrinsic_load_var:
+		result = visit_load_var(ctx, instr);
+		break;
+	case nir_intrinsic_store_var:
+		visit_store_var(ctx, instr);
 		break;
 	default:
 		fprintf(stderr, "Unknown intrinsic: ");
@@ -646,6 +747,217 @@ static void visit_cf_list(struct nir_to_llvm_context *ctx,
 	}
 }
 
+static void
+handle_vs_input_decl(struct nir_to_llvm_context *ctx,
+		     struct nir_variable *variable)
+{
+	LLVMValueRef t_list_ptr = ctx->vertex_buffers;
+	LLVMValueRef t_offset;
+	LLVMValueRef t_list;
+	LLVMValueRef args[3];
+	LLVMValueRef input;
+	LLVMValueRef buffer_index;
+	int index = variable->data.location - 17;
+	int idx = ctx->num_inputs++;
+	if (variable->name)
+		fprintf(stderr, "vs input %s\n", variable->name);
+
+	variable->data.driver_location = idx;
+	t_offset = LLVMConstInt(ctx->i32, index, false);
+
+	t_list = build_indexed_load_const(ctx, t_list_ptr, t_offset);
+
+	buffer_index = LLVMBuildAdd(ctx->builder, ctx->vertex_id,
+				    ctx->base_vertex, "");
+	args[0] = t_list;
+	args[1] = LLVMConstInt(ctx->i32, 0, false);
+	args[2] = buffer_index;
+	input = emit_llvm_intrinsic(ctx,
+		"llvm.SI.vs.load.input", ctx->v4f32, args, 3,
+		LLVMReadNoneAttribute | LLVMNoUnwindAttribute);
+
+	for (unsigned chan = 0; chan < 4; chan++) {
+		LLVMValueRef llvm_chan = LLVMConstInt(ctx->i32, chan, false);
+		ctx->inputs[radeon_llvm_reg_index_soa(idx, chan)] =
+			LLVMBuildExtractElement(ctx->builder,
+						input, llvm_chan, "");
+	}
+}
+
+static void
+handle_shader_input_decl(struct nir_to_llvm_context *ctx,
+			 struct nir_variable *variable)
+{
+	switch (ctx->stage) {
+	case MESA_SHADER_VERTEX:
+		handle_vs_input_decl(ctx, variable);
+		break;
+	case MESA_SHADER_FRAGMENT:
+		break;
+	default:
+		break;
+	}
+
+}
+
+static LLVMValueRef
+ac_build_alloca(struct nir_to_llvm_context *ctx,
+                LLVMTypeRef type,
+                const char *name)
+{
+	LLVMBuilderRef builder = ctx->builder;
+	LLVMBasicBlockRef current_block = LLVMGetInsertBlock(builder);
+	LLVMValueRef function = LLVMGetBasicBlockParent(current_block);
+	LLVMBasicBlockRef first_block = LLVMGetEntryBasicBlock(function);
+	LLVMValueRef first_instr = LLVMGetFirstInstruction(first_block);
+	LLVMBuilderRef first_builder = LLVMCreateBuilderInContext(ctx->context);
+	LLVMValueRef res;
+
+	if (first_instr) {
+		LLVMPositionBuilderBefore(first_builder, first_instr);
+	} else {
+		LLVMPositionBuilderAtEnd(first_builder, first_block);
+	}
+
+	res = LLVMBuildAlloca(first_builder, type, name);
+	LLVMBuildStore(builder, LLVMConstNull(type), res);
+
+	LLVMDisposeBuilder(first_builder);
+
+	return res;
+}
+
+static LLVMValueRef si_build_alloca_undef(struct nir_to_llvm_context *ctx,
+					  LLVMTypeRef type,
+					  const char *name)
+{
+	LLVMValueRef ptr = ac_build_alloca(ctx, type, name);
+	LLVMBuildStore(ctx->builder, LLVMGetUndef(type), ptr);
+	return ptr;
+}
+
+static void
+handle_shader_output_decl(struct nir_to_llvm_context *ctx,
+			  struct nir_variable *variable)
+{
+	int idx = ctx->num_outputs;
+
+	variable->data.driver_location = idx;
+	for (unsigned chan = 0; chan < 4; chan++)
+		ctx->outputs[idx][chan] = si_build_alloca_undef(ctx, ctx->f32, "");
+	ctx->num_outputs++;
+}
+
+/* Initialize arguments for the shader export intrinsic */
+static void
+si_llvm_init_export_args(struct nir_to_llvm_context *ctx,
+			 LLVMValueRef *values,
+			 unsigned target,
+			 LLVMValueRef *args)
+{
+	LLVMValueRef val[4];
+
+	/* Default is 0xf. Adjusted below depending on the format. */
+	args[0] = LLVMConstInt(ctx->i32, 0xf, false);
+	/* Specify whether the EXEC mask represents the valid mask */
+	args[1] = LLVMConstInt(ctx->i32, 0, false);
+
+	/* Specify whether this is the last export */
+	args[2] = LLVMConstInt(ctx->i32, 0, false);
+	/* Specify the target we are exporting */
+	args[3] = LLVMConstInt(ctx->i32, target, false);
+
+	args[4] = LLVMConstInt(ctx->i32, 0, false); /* COMPR flag */
+	args[5] = LLVMGetUndef(ctx->f32);
+	args[6] = LLVMGetUndef(ctx->f32);
+	args[7] = LLVMGetUndef(ctx->f32);
+	args[8] = LLVMGetUndef(ctx->f32);
+
+	/* TODO expand this for frag shader */
+	memcpy(&args[5], values, sizeof(values[0]) * 4);
+}
+
+static void
+handle_vs_outputs_post(struct nir_to_llvm_context *ctx,
+		      struct nir_shader *nir)
+{
+	uint32_t param_count = 0;
+	struct si_shader_output_values *outputs;
+	unsigned target;
+	int index;
+	LLVMValueRef args[9];
+	LLVMValueRef pos_args[4][9] = { { 0 } };
+	outputs = malloc(ctx->num_outputs * sizeof(outputs[0]));
+	if (!outputs)
+		return;
+
+	for (unsigned i = 0; i < ctx->num_outputs; i++) {
+		for (unsigned j = 0; j < 4; j++)
+			outputs[i].values[j] =
+				LLVMBuildLoad(ctx->builder,
+					      ctx->outputs[i][j], "");
+	}
+
+	index = 0;
+	nir_foreach_variable(variable, &nir->outputs) {
+		if (variable->data.location == VARYING_SLOT_POS)
+			target = V_008DFC_SQ_EXP_POS;
+		else if (variable->data.location >= VARYING_SLOT_VAR0) {
+			target = V_008DFC_SQ_EXP_PARAM + param_count;
+			param_count++;
+		}
+		si_llvm_init_export_args(ctx, outputs[index].values, target, args);
+
+		if (target >= V_008DFC_SQ_EXP_POS &&
+		    target <= (V_008DFC_SQ_EXP_POS + 3)) {
+			memcpy(pos_args[target - V_008DFC_SQ_EXP_POS],
+			       args, sizeof(args));
+		} else {
+			emit_llvm_intrinsic(ctx,
+					    "llvm.SI.export",
+					    LLVMVoidTypeInContext(ctx->context),
+					    args, 9, 0);
+		}
+	}
+}
+
+static void
+handle_shader_outputs_post(struct nir_to_llvm_context *ctx,
+			   struct nir_shader *nir)
+{
+	switch (ctx->stage) {
+	case MESA_SHADER_VERTEX:
+		handle_vs_outputs_post(ctx, nir);
+		break;
+	default:
+		break;
+	}
+}
+
+static void ac_llvm_finalize_module(struct nir_to_llvm_context * ctx)
+{
+	LLVMPassManagerRef passmgr;
+	/* Create the pass manager */
+	passmgr = LLVMCreateFunctionPassManagerForModule(
+							ctx->module);
+
+	/* This pass should eliminate all the load and store instructions */
+	LLVMAddPromoteMemoryToRegisterPass(passmgr);
+
+	/* Add some optimization passes */
+	LLVMAddScalarReplAggregatesPass(passmgr);
+	LLVMAddLICMPass(passmgr);
+	LLVMAddAggressiveDCEPass(passmgr);
+	LLVMAddCFGSimplificationPass(passmgr);
+	LLVMAddInstructionCombiningPass(passmgr);
+
+	/* Run the pass */
+	LLVMRunFunctionPassManager(passmgr, ctx->main_function);
+
+	LLVMDisposeBuilder(ctx->builder);
+	LLVMDisposePassManager(passmgr);
+}
+
 LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
                                        struct nir_shader *nir)
 {
@@ -653,10 +965,23 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 	struct nir_function *func;
 	ctx.context = LLVMContextCreate();
 	ctx.module = LLVMModuleCreateWithNameInContext("shader", ctx.context);
+
+	LLVMSetTarget(ctx.module, "amdgcn--");
 	setup_types(&ctx);
 
+	const char *triple = LLVMGetTarget(ctx.module);
+
 	ctx.builder = LLVMCreateBuilderInContext(ctx.context);
+	ctx.stage = nir->stage;
+
 	create_function(&ctx, nir);
+
+	ctx.num_inputs = 0;
+	nir_foreach_variable(variable, &nir->inputs)
+		handle_shader_input_decl(&ctx, variable);
+	ctx.num_outputs = 0;
+	nir_foreach_variable(variable, &nir->outputs)
+		handle_shader_output_decl(&ctx, variable);
 
 	ctx.defs = _mesa_hash_table_create(NULL, _mesa_hash_pointer,
 	                                   _mesa_key_pointer_equal);
@@ -664,8 +989,11 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 	func = (struct nir_function *)exec_list_get_head(&nir->functions);
 	visit_cf_list(&ctx, &func->impl->body);
 
+	handle_shader_outputs_post(&ctx, nir);
 	LLVMBuildRetVoid(ctx.builder);
-	LLVMDisposeBuilder(ctx.builder);
+
+	LLVMDumpModule(ctx.module);
+	ac_llvm_finalize_module(&ctx);
 	ralloc_free(ctx.defs);
 
 	return ctx.module;
