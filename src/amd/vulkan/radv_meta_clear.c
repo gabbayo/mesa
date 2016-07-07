@@ -409,14 +409,15 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
 
 
 static void
-build_depthstencil_shader(struct nir_shader **out_vs)
+build_depthstencil_shader(struct nir_shader **out_vs, struct nir_shader **out_fs)
 {
-   nir_builder vs_b;
+   nir_builder vs_b, fs_b;
 
    nir_builder_init_simple_shader(&vs_b, NULL, MESA_SHADER_VERTEX, NULL);
+   nir_builder_init_simple_shader(&fs_b, NULL, MESA_SHADER_FRAGMENT, NULL);
 
    vs_b.shader->info.name = ralloc_strdup(vs_b.shader, "meta_clear_depthstencil_vs");
-
+   fs_b.shader->info.name = ralloc_strdup(fs_b.shader, "meta_clear_depthstencil_fs");
    const struct glsl_type *position_type = glsl_vec4_type();
 
    nir_variable *vs_in_pos =
@@ -432,6 +433,7 @@ build_depthstencil_shader(struct nir_shader **out_vs)
    nir_copy_var(&vs_b, vs_out_pos, vs_in_pos);
 
    *out_vs = vs_b.shader;
+   *out_fs = fs_b.shader;
 }
 
 static VkResult
@@ -440,9 +442,9 @@ create_depthstencil_pipeline(struct radv_device *device,
                              uint32_t samples,
                              struct radv_pipeline **pipeline)
 {
-   struct nir_shader *vs_nir;
+   struct nir_shader *vs_nir, *fs_nir;
 
-   build_depthstencil_shader(&vs_nir);
+   build_depthstencil_shader(&vs_nir, &fs_nir);
 
    const VkPipelineVertexInputStateCreateInfo vi_state = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -496,7 +498,7 @@ create_depthstencil_pipeline(struct radv_device *device,
       .pAttachments = NULL,
    };
 
-   return create_pipeline(device, samples, vs_nir, NULL, &vi_state, &ds_state,
+   return create_pipeline(device, samples, vs_nir, fs_nir, &vi_state, &ds_state,
                           &cb_state, &device->meta_state.alloc,
                           /*use_repclear*/ true, pipeline);
 }
