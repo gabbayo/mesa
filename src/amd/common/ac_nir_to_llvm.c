@@ -66,6 +66,11 @@ struct nir_to_llvm_context {
 	LLVMTypeRef v4f32;
 	LLVMTypeRef v16i8;
 
+	LLVMValueRef i32zero;
+	LLVMValueRef i32one;
+	LLVMValueRef f32zero;
+	LLVMValueRef f32one;
+
 	unsigned uniform_md_kind;
 	LLVMValueRef empty_md;
 	LLVMValueRef const_md;
@@ -162,7 +167,7 @@ static LLVMValueRef build_indexed_load(struct nir_to_llvm_context *ctx,
 				       bool uniform)
 {
 	LLVMValueRef pointer;
-	LLVMValueRef indices[] = {LLVMConstInt(ctx->i32, 0, false), index};
+	LLVMValueRef indices[] = {ctx->i32zero, index};
 
 	pointer = LLVMBuildGEP(ctx->builder, base_ptr, indices, 2, "");
 	if (uniform)
@@ -247,6 +252,10 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->v4f32 = LLVMVectorType(ctx->f32, 4);
 	ctx->v16i8 = LLVMVectorType(ctx->i8, 16);
 
+	ctx->i32zero = LLVMConstInt(ctx->i32, 0, false);
+	ctx->i32one = LLVMConstInt(ctx->i32, 1, false);
+	ctx->f32zero = LLVMConstReal(ctx->f32, 0.0);
+	ctx->f32one = LLVMConstReal(ctx->f32, 1.0);
 	args[0] = LLVMMDStringInContext(ctx->context, "const", 5);
 	args[1] = 0;
 	args[2] = LLVMConstInt(ctx->i32, 1, 0);
@@ -472,7 +481,7 @@ static LLVMValueRef visit_vulkan_resource_index(struct nir_to_llvm_context *ctx,
 	index = LLVMBuildMul(ctx->builder, index, stride, "");
 	offset = LLVMBuildAdd(ctx->builder, offset, index, "");
 
-	LLVMValueRef indices[] = {LLVMConstInt(ctx->i32, 0, false), offset};
+	LLVMValueRef indices[] = {ctx->i32zero, offset};
 	desc_ptr = LLVMBuildGEP(ctx->builder, desc_ptr, indices, 2, "");
 	desc_ptr = cast_ptr(ctx, desc_ptr, ctx->v4i32);
 	LLVMSetMetadata(desc_ptr, ctx->uniform_md_kind, ctx->empty_md);
