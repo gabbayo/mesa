@@ -65,6 +65,7 @@ struct nir_to_llvm_context {
 	LLVMTypeRef f32;
 	LLVMTypeRef v4f32;
 	LLVMTypeRef v16i8;
+	LLVMTypeRef voidt;
 
 	LLVMValueRef i32zero;
 	LLVMValueRef i32one;
@@ -243,6 +244,8 @@ static void create_function(struct nir_to_llvm_context *ctx,
 static void setup_types(struct nir_to_llvm_context *ctx)
 {
 	LLVMValueRef args[3];
+
+	ctx->voidt = LLVMVoidTypeInContext(ctx->context);
 	ctx->i1 = LLVMIntTypeInContext(ctx->context, 1);
 	ctx->i8 = LLVMIntTypeInContext(ctx->context, 8);
 	ctx->i16 = LLVMIntTypeInContext(ctx->context, 16);
