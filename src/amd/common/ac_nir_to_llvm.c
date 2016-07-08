@@ -893,14 +893,16 @@ handle_vs_outputs_post(struct nir_to_llvm_context *ctx,
 	uint32_t param_count = 0;
 	struct si_shader_output_values *outputs;
 	unsigned target;
+	unsigned pos_idx, num_pos_exports = 0;
 	int index;
 	LLVMValueRef args[9];
 	LLVMValueRef pos_args[4][9] = { { 0 } };
+	int i;
 	outputs = malloc(ctx->num_outputs * sizeof(outputs[0]));
 	if (!outputs)
 		return;
 
-	for (unsigned i = 0; i < ctx->num_outputs; i++) {
+	for (i = 0; i < ctx->num_outputs; i++) {
 		for (unsigned j = 0; j < 4; j++)
 			outputs[i].values[j] =
 				LLVMBuildLoad(ctx->builder,
@@ -927,6 +929,39 @@ handle_vs_outputs_post(struct nir_to_llvm_context *ctx,
 					    LLVMVoidTypeInContext(ctx->context),
 					    args, 9, 0);
 		}
+		index++;
+	}
+
+	/* We need to add the position output manually if it's missing. */
+	if (!pos_args[0][0]) {
+		pos_args[0][0] = LLVMConstInt(ctx->i32, 0xf, false);
+		pos_args[0][1] = ctx->i32zero; /* EXEC mask */
+		pos_args[0][2] = ctx->i32zero; /* last export? */
+		pos_args[0][3] = LLVMConstInt(ctx->i32, V_008DFC_SQ_EXP_POS, false);
+		pos_args[0][4] = ctx->i32zero; /* COMPR flag */
+		pos_args[0][5] = ctx->f32zero; /* X */
+		pos_args[0][6] = ctx->f32zero; /* Y */
+		pos_args[0][7] = ctx->f32zero; /* Z */
+		pos_args[0][8] = ctx->f32one;  /* W */
+	}
+	for (i = 0; i < 4; i++) {
+		if (pos_args[i][0])
+			num_pos_exports++;
+	}
+
+	pos_idx = 0;
+	for (i = 0; i < 4; i++) {
+		if (!pos_args[i][0])
+			continue;
+
+		/* Specify the target we are exporting */
+		pos_args[i][3] = LLVMConstInt(ctx->i32, V_008DFC_SQ_EXP_POS + pos_idx++, false);
+		if (pos_idx == num_pos_exports)
+			pos_args[i][2] = ctx->i32one;
+		emit_llvm_intrinsic(ctx,
+				    "llvm.SI.export",
+				    LLVMVoidTypeInContext(ctx->context),
+				    pos_args[i], 9, 0);
 	}
 }
 
