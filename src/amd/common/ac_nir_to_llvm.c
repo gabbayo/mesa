@@ -81,6 +81,8 @@ struct nir_to_llvm_context {
 	LLVMValueRef outputs[RADEON_LLVM_MAX_OUTPUTS][4];
 	int num_inputs;
 	int num_outputs;
+	int num_locals;
+	LLVMValueRef *locals;
 };
 
 struct si_shader_output_values
@@ -582,6 +584,11 @@ static LLVMValueRef visit_load_var(struct nir_to_llvm_context *ctx,
 		}
 		return build_gather_values(ctx, values, 4);
 		break;
+	case nir_var_local:
+		for (unsigned chan = 0; chan < 4; chan++) {
+			values[chan] = LLVMBuildLoad(ctx->builder, ctx->locals[idx * 4 + chan], "");
+		}
+		return build_gather_values(ctx, values, 4);
 	default:
 		break;
 	}
@@ -601,6 +608,16 @@ visit_store_var(struct nir_to_llvm_context *ctx,
 		for (unsigned chan = 0; chan < 4; chan++) {
 			if (writemask & (1 << chan)) {
 				temp_ptr = ctx->outputs[idx][chan];
+
+				value = LLVMBuildExtractElement(ctx->builder, src, LLVMConstInt(ctx->i32, chan, false), "");
+				LLVMBuildStore(ctx->builder, value, temp_ptr);
+			}
+		}
+		break;
+	case nir_var_local:
+		for (unsigned chan = 0; chan < 4; chan++) {
+			if (writemask & (1 << chan)) {
+				temp_ptr = ctx->locals[radeon_llvm_reg_index_soa(idx, chan)];
 
 				value = LLVMBuildExtractElement(ctx->builder, src, LLVMConstInt(ctx->i32, chan, false), "");
 				LLVMBuildStore(ctx->builder, value, temp_ptr);
@@ -931,6 +948,28 @@ handle_shader_output_decl(struct nir_to_llvm_context *ctx,
 	ctx->num_outputs++;
 }
 
+static void
+setup_locals(struct nir_to_llvm_context *ctx,
+	     struct nir_function *func)
+{
+	int i, j;
+	ctx->num_locals = 0;
+	nir_foreach_variable(variable, &func->impl->locals) {
+		variable->data.driver_location = ctx->num_locals;
+		ctx->num_locals++;
+	}
+	ctx->locals = malloc(4 * ctx->num_locals * sizeof(LLVMValueRef));
+	if (!ctx->locals)
+	    return;
+
+	for (i = 0; i < ctx->num_locals; i++) {
+		for (j = 0; j < 4; j++) {
+			ctx->locals[i * 4 + j] =
+				si_build_alloca_undef(ctx, ctx->f32, "temp");
+		}
+	}
+}
+
 /* Initialize arguments for the shader export intrinsic */
 static void
 si_llvm_init_export_args(struct nir_to_llvm_context *ctx,
@@ -1145,6 +1184,9 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 	                                   _mesa_key_pointer_equal);
 
 	func = (struct nir_function *)exec_list_get_head(&nir->functions);
+
+	setup_locals(&ctx, func);
+
 	visit_cf_list(&ctx, &func->impl->body);
 
 	handle_shader_outputs_post(&ctx, nir);
@@ -1152,6 +1194,7 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 
 	LLVMDumpModule(ctx.module);
 	ac_llvm_finalize_module(&ctx);
+	free(ctx.locals);
 	ralloc_free(ctx.defs);
 
 	return ctx.module;
