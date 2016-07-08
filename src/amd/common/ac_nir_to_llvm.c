@@ -796,6 +796,76 @@ handle_vs_input_decl(struct nir_to_llvm_context *ctx,
 	}
 }
 
+static int lookup_interp_param_index(enum glsl_interp_qualifier interp, unsigned location)
+{
+	switch (interp) {
+	case INTERP_QUALIFIER_NONE:
+	case INTERP_QUALIFIER_FLAT:
+	default:
+		return 0;
+	case INTERP_QUALIFIER_SMOOTH:
+	case INTERP_QUALIFIER_NOPERSPECTIVE:
+		return 0;
+	}
+}
+
+static void interp_fs_input(struct nir_to_llvm_context *ctx,
+			    struct nir_variable *var,
+			    unsigned input_index,
+			    LLVMValueRef interp_param,
+			    LLVMValueRef prim_mask,
+			    LLVMValueRef result[4])
+{
+	const char *intr_name;
+	LLVMValueRef attr_number;
+
+	unsigned chan;
+
+	attr_number = LLVMConstInt(ctx->i32, input_index, false);
+
+	/* fs.constant returns the param from the middle vertex, so it's not
+	 * really useful for flat shading. It's meant to be used for custom
+	 * interpolation (but the intrinsic can't fetch from the other two
+	 * vertices).
+	 *
+	 * Luckily, it doesn't matter, because we rely on the FLAT_SHADE state
+	 * to do the right thing. The only reason we use fs.constant is that
+	 * fs.interp cannot be used on integers, because they can be equal
+	 * to NaN.
+	 */
+	intr_name = interp_param ? "llvm.SI.fs.interp" : "llvm.SI.fs.constant";
+
+	for (chan = 0; chan < 4; chan++) {
+		LLVMValueRef args[4];
+		LLVMValueRef llvm_chan = LLVMConstInt(ctx->i32, chan, false);
+
+		args[0] = llvm_chan;
+		args[1] = attr_number;
+		args[2] = prim_mask;
+		args[3] = interp_param;
+		result[chan] = emit_llvm_intrinsic(ctx, intr_name,
+						   ctx->f32, args, args[3] ? 4 : 3,
+						  LLVMReadNoneAttribute | LLVMNoUnwindAttribute);
+	}
+}
+
+static void
+handle_fs_input_decl(struct nir_to_llvm_context *ctx,
+		     struct nir_variable *variable)
+{
+	int idx = ctx->num_inputs++;
+	int interp_param_idx;
+	LLVMValueRef interp_param = NULL;
+
+	interp_param_idx = lookup_interp_param_index(variable->data.interpolation, 0);
+	if (interp_param_idx == -1)
+		return;
+
+	interp_fs_input(ctx, variable, idx, interp_param,
+			LLVMGetParam(ctx->main_function, 0/*TODO SI_PARAM_PRIM_MASK*/),
+			&ctx->inputs[radeon_llvm_reg_index_soa(idx, 0)]);
+}
+
 static void
 handle_shader_input_decl(struct nir_to_llvm_context *ctx,
 			 struct nir_variable *variable)
@@ -805,6 +875,7 @@ handle_shader_input_decl(struct nir_to_llvm_context *ctx,
 		handle_vs_input_decl(ctx, variable);
 		break;
 	case MESA_SHADER_FRAGMENT:
+		handle_fs_input_decl(ctx, variable);
 		break;
 	default:
 		break;
@@ -969,12 +1040,52 @@ handle_vs_outputs_post(struct nir_to_llvm_context *ctx,
 }
 
 static void
+si_export_mrt_color(struct nir_to_llvm_context *ctx,
+		    LLVMValueRef *color, unsigned index, bool is_last)
+{
+	LLVMValueRef args[9];
+	/* Export */
+	si_llvm_init_export_args(ctx, color, V_008DFC_SQ_EXP_MRT + index,
+				 args);
+
+	if (is_last) {
+		args[1] = ctx->i32one; /* whether the EXEC mask is valid */
+		args[2] = ctx->i32one; /* DONE bit */
+	} else if (args[0] == ctx->i32zero)
+		return; /* unnecessary NULL export */
+
+	emit_llvm_intrinsic(ctx, "llvm.SI.export",
+			    ctx->voidt, args, 9, 0);
+}
+
+static void
+handle_fs_outputs_post(struct nir_to_llvm_context *ctx,
+		       struct nir_shader *nir)
+{
+	int index;
+	struct nir_variable *variable;
+	index = 0;
+	nir_foreach_variable(variable, &nir->outputs) {
+		LLVMValueRef color[4] = {};
+		int j;
+		for (j = 0; j < 4; j++)
+			color[j] = LLVMBuildLoad(ctx->builder,
+						 ctx->outputs[index][j], "");
+		si_export_mrt_color(ctx, color, index, index == ctx->num_outputs);
+		index++;
+	}
+}
+
+static void
 handle_shader_outputs_post(struct nir_to_llvm_context *ctx,
 			   struct nir_shader *nir)
 {
 	switch (ctx->stage) {
 	case MESA_SHADER_VERTEX:
 		handle_vs_outputs_post(ctx, nir);
+		break;
+	case MESA_SHADER_FRAGMENT:
+		handle_fs_outputs_post(ctx, nir);
 		break;
 	default:
 		break;
