@@ -106,6 +106,11 @@ static VkResult radv_create_cmd_buffer(
    cmd_buffer->cs = device->ws->cs_create(device->ws, RING_GFX);
    *pCommandBuffer = radv_cmd_buffer_to_handle(cmd_buffer);
 
+   cmd_buffer->upload.upload_bo.bo = device->ws->buffer_create(device->ws,
+							       RADV_CMD_BUFFER_UPLOAD_SIZE, 16,
+							       RADEON_DOMAIN_GTT,
+							       RADEON_FLAG_CPU_ACCESS);
+
    return VK_SUCCESS;
 
  fail:
@@ -359,6 +364,7 @@ radv_cmd_buffer_destroy(struct radv_cmd_buffer *cmd_buffer)
 {
    list_del(&cmd_buffer->pool_link);
 
+   cmd_buffer->device->ws->buffer_destroy(cmd_buffer->upload.upload_bo.bo);
    cmd_buffer->device->ws->cs_destroy(cmd_buffer->cs);
    radv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 }
