@@ -210,9 +210,18 @@ static struct radeon_winsys_ctx *amdgpu_ctx_create(struct radeon_winsys *_ws)
    return NULL;
 }
 
+static void amdgpu_ctx_destroy(struct radeon_winsys_ctx *rwctx)
+{
+   struct amdgpu_ctx *ctx = (struct amdgpu_ctx *)rwctx;
+   amdgpu_cs_ctx_free(ctx->ctx);
+   FREE(ctx);
+}
+
+
 void radv_amdgpu_cs_init_functions(struct amdgpu_winsys *ws)
 {
    ws->base.ctx_create = amdgpu_ctx_create;
+   ws->base.ctx_destroy = amdgpu_ctx_destroy;
    ws->base.cs_create = amdgpu_cs_create;
    ws->base.cs_destroy = amdgpu_cs_destroy;
    ws->base.cs_add_buffer = amdgpu_cs_add_buffer;
