@@ -27,15 +27,13 @@
 
 /** Vertex attributes for color clears.  */
 struct color_clear_vattrs {
-  //   struct radv_vue_header vue_header;
-   float position[2]; /**< 3DPRIM_RECTLIST */
+   float position[2];
    VkClearColorValue color;
 };
 
 /** Vertex attributes for depthstencil clears.  */
 struct depthstencil_clear_vattrs {
-  //   struct radv_vue_header vue_header;
-   float position[2]; /*<< 3DPRIM_RECTLIST */
+   float position[2];
 };
 
 static void
@@ -245,25 +243,18 @@ create_color_pipeline(struct radv_device *device,
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          },
       },
-      .vertexAttributeDescriptionCount = 3,
+      .vertexAttributeDescriptionCount = 2,
       .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) {
          {
-            /* VUE Header */
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32A32_UINT,
-	    //            .offset = offsetof(struct color_clear_vattrs, vue_header),
-         },
-         {
             /* Position */
-            .location = 1,
+            .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(struct color_clear_vattrs, position),
          },
          {
             /* Color */
-            .location = 2,
+            .location = 1,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
             .offset = offsetof(struct color_clear_vattrs, color),
@@ -352,6 +343,7 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
 
    VkCommandBuffer cmd_buffer_h = radv_cmd_buffer_to_handle(cmd_buffer);
    VkPipeline pipeline_h = radv_pipeline_to_handle(pipeline);
+   uint32_t offset;
 
    assert(samples_log2 < ARRAY_SIZE(device->meta_state.clear));
    assert(clear_att->aspectMask == VK_IMAGE_ASPECT_COLOR_BIT);
@@ -381,19 +373,14 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
       },
    };
 
-   //   struct radv_state state =
-   // radv_cmd_buffer_emit_dynamic(cmd_buffer, vertex_data, sizeof(vertex_data), 16);
-
-   struct radv_buffer vertex_buffer;
-
-#if 0
-   = {
-      .device = device,
-      .size = sizeof(vertex_data),
-      .bo = &device->dynamic_state_block_pool.bo,
-      .offset = state.offset,
+   radv_cmd_buffer_upload_data(cmd_buffer, sizeof(vertex_data), 16, vertex_data, &offset);
+   struct radv_buffer vertex_buffer = {
+     .device = device,
+     .size = sizeof(vertex_data),
+     .bo = &cmd_buffer->upload.upload_bo,
+     .offset = offset,
    };
-#endif
+
 
    RADV_CALL(CmdBindVertexBuffers)(cmd_buffer_h, 0, 1,
       (VkBuffer[]) { radv_buffer_to_handle(&vertex_buffer) },
@@ -456,18 +443,11 @@ create_depthstencil_pipeline(struct radv_device *device,
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
          },
       },
-      .vertexAttributeDescriptionCount = 2,
+      .vertexAttributeDescriptionCount = 1,
       .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) {
          {
-            /* VUE Header */
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32A32_UINT,
-	    //            .offset = offsetof(struct depthstencil_clear_vattrs, vue_header),
-         },
-         {
             /* Position */
-            .location = 1,
+            .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(struct depthstencil_clear_vattrs, position),
@@ -520,7 +500,7 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
    VkImageAspectFlags aspects = clear_att->aspectMask;
 
    VkCommandBuffer cmd_buffer_h = radv_cmd_buffer_to_handle(cmd_buffer);
-
+   uint32_t offset;
    assert(samples_log2 < ARRAY_SIZE(meta_state->clear));
    assert(aspects == VK_IMAGE_ASPECT_DEPTH_BIT ||
           aspects == VK_IMAGE_ASPECT_STENCIL_BIT ||
@@ -549,17 +529,14 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
       },
    };
 
-   //   struct radv_state state =
-   //      radv_cmd_buffer_emit_dynamic(cmd_buffer, vertex_data, sizeof(vertex_data), 16);
-#if 0
+   radv_cmd_buffer_upload_data(cmd_buffer, sizeof(vertex_data), 16, vertex_data, &offset);
    struct radv_buffer vertex_buffer = {
       .device = device,
       .size = sizeof(vertex_data),
-      .bo = &device->dynamic_state_block_pool.bo,
-      .offset = state.offset,
+      .bo = &cmd_buffer->upload.upload_bo,
+      .offset = offset,
    };
-#endif
-   struct radv_buffer vertex_buffer;
+
    RADV_CALL(CmdSetViewport)(cmd_buffer_h, 0, 1,
       (VkViewport[]) {
          {

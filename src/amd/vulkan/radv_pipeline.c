@@ -10,7 +10,7 @@
 #include "ac_binary.h"
 #include "ac_llvm_util.h"
 #include "ac_nir_to_llvm.h"
-
+#include "vk_format.h"
 static void radv_shader_variant_destroy(struct radv_device *device,
                                         struct radv_shader_variant *variant);
 
@@ -422,6 +422,24 @@ si_translate_prim(enum VkPrimitiveTopology topology)
     }
 }
 
+static unsigned si_map_swizzle(unsigned swizzle)
+{
+	switch (swizzle) {
+	case VK_SWIZZLE_Y:
+		return V_008F0C_SQ_SEL_Y;
+	case VK_SWIZZLE_Z:
+		return V_008F0C_SQ_SEL_Z;
+	case VK_SWIZZLE_W:
+		return V_008F0C_SQ_SEL_W;
+	case VK_SWIZZLE_0:
+		return V_008F0C_SQ_SEL_0;
+	case VK_SWIZZLE_1:
+		return V_008F0C_SQ_SEL_1;
+	default: /* VK_SWIZZLE_X */
+		return V_008F0C_SQ_SEL_X;
+	}
+}
+
 VkResult
 radv_pipeline_init(struct radv_pipeline *pipeline,
                   struct radv_device *device,
@@ -469,8 +487,52 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
    radv_pipeline_init_raster_state(pipeline, pCreateInfo);
 
    pipeline->graphics.prim = si_translate_prim(pCreateInfo->pInputAssemblyState->topology);
+   pipeline->graphics.prim_restart_enable = pCreateInfo->pInputAssemblyState->primitiveRestartEnable;
 
-   //   nir_shader *nir = _pipeline
+   const VkPipelineVertexInputStateCreateInfo *vi_info =
+       pCreateInfo->pVertexInputState;
+   for (uint32_t i = 0; i < vi_info->vertexAttributeDescriptionCount; i++) {
+       const VkVertexInputAttributeDescription *desc =
+	   &vi_info->pVertexAttributeDescriptions[i];
+       const struct vk_format_description *format_desc;
+       int first_non_void;
+       uint32_t num_format, data_format;
+       format_desc = vk_format_description(desc->format);
+       first_non_void = vk_format_get_first_non_void_channel(desc->format);
+
+       num_format = radv_translate_buffer_numformat(format_desc, first_non_void);
+       data_format = radv_translate_buffer_dataformat(format_desc, first_non_void);
+
+       pipeline->va_rsrc_word3[i] = S_008F0C_DST_SEL_X(si_map_swizzle(format_desc->swizzle[0])) |
+	   S_008F0C_DST_SEL_Y(si_map_swizzle(format_desc->swizzle[1])) |
+	   S_008F0C_DST_SEL_Z(si_map_swizzle(format_desc->swizzle[2])) |
+	   S_008F0C_DST_SEL_W(si_map_swizzle(format_desc->swizzle[3])) |
+	   S_008F0C_NUM_FORMAT(num_format) |
+	   S_008F0C_DATA_FORMAT(data_format);
+
+       pipeline->va_binding[i] = desc->binding;
+   }
+   pipeline->num_vertex_attribs = vi_info->vertexAttributeDescriptionCount;
+   for (uint32_t i = 0; i < vi_info->vertexBindingDescriptionCount; i++) {
+      const VkVertexInputBindingDescription *desc =
+         &vi_info->pVertexBindingDescriptions[i];
+
+      pipeline->binding_stride[desc->binding] = desc->stride;
+
+      /* Step rate is programmed per vertex element (attribute), not
+       * binding. Set up a map of which bindings step per instance, for
+       * reference by vertex element setup. */
+      switch (desc->inputRate) {
+      default:
+      case VK_VERTEX_INPUT_RATE_VERTEX:
+         pipeline->instancing_enable[desc->binding] = false;
+         break;
+      case VK_VERTEX_INPUT_RATE_INSTANCE:
+         pipeline->instancing_enable[desc->binding] = true;
+         break;
+      }
+   }
+
    return VK_SUCCESS;
 }
 

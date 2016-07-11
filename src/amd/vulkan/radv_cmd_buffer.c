@@ -295,7 +295,47 @@ static void
 radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 {
     struct radv_pipeline *pipeline = cmd_buffer->state.pipeline;
+    struct radv_device *device = cmd_buffer->device;
 
+    if (cmd_buffer->state.vertex_descriptors_dirty || cmd_buffer->state.vb_dirty) {
+      unsigned vb_offset;
+      void *vb_ptr;
+      uint32_t ve, i = 0;
+      uint32_t num_attribs = cmd_buffer->state.pipeline->num_vertex_attribs;
+      uint64_t va;
+      fprintf(stderr, "need to emit num vertex bufs %d\n", num_attribs);
+
+      /* allocate some descriptor state for vertex buffers */
+      radv_cmd_buffer_upload_alloc(cmd_buffer, num_attribs * 16, 256,
+				   &vb_offset, &vb_ptr);
+
+      for (i = 0; i < num_attribs; i++) {
+	  uint32_t *desc = &((uint32_t *)vb_ptr)[i * 4];
+
+	  int vb = cmd_buffer->state.pipeline->va_binding[i];
+	  struct radv_buffer *buffer = cmd_buffer->state.vertex_bindings[vb].buffer;
+	  uint32_t stride = cmd_buffer->state.pipeline->binding_stride[vb];
+
+	  va = device->ws->buffer_get_va(buffer->bo->bo);
+
+	  desc[0] = va;
+	  desc[1] = S_008F04_BASE_ADDRESS_HI(va >> 32) | S_008F04_STRIDE(stride);
+	  desc[2] = buffer->size;
+	  //TODO CIK
+	  desc[3] = cmd_buffer->state.pipeline->va_rsrc_word3[i];
+
+	  i++;
+      }
+
+      va = device->ws->buffer_get_va(cmd_buffer->upload.upload_bo.bo);
+      va += vb_offset;
+      radeon_set_sh_reg_seq(cmd_buffer->cs,
+			    R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
+      radeon_emit(cmd_buffer->cs, va);
+      radeon_emit(cmd_buffer->cs, va >> 32);
+    }
+    cmd_buffer->state.vertex_descriptors_dirty = false;
+    cmd_buffer->state.vb_dirty = 0;
     if (cmd_buffer->state.dirty & RADV_CMD_DIRTY_PIPELINE)
         radv_emit_graphics_pipeline(cmd_buffer, pipeline);
 
@@ -442,8 +482,18 @@ void radv_CmdBindVertexBuffers(
     const VkBuffer*                             pBuffers,
     const VkDeviceSize*                         pOffsets)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+   struct radv_vertex_binding *vb = cmd_buffer->state.vertex_bindings;
 
+   /* We have to defer setting up vertex buffer since we need the buffer
+    * stride from the pipeline. */
+
+   assert(firstBinding + bindingCount < MAX_VBS);
+   for (uint32_t i = 0; i < bindingCount; i++) {
+      vb[firstBinding + i].buffer = radv_buffer_from_handle(pBuffers[i]);
+      vb[firstBinding + i].offset = pOffsets[i];
+      cmd_buffer->state.vb_dirty |= 1 << (firstBinding + i);
+   }
 }
 
 void radv_CmdBindDescriptorSets(
@@ -536,7 +586,7 @@ void radv_CmdBindPipeline(
        break;
    case VK_PIPELINE_BIND_POINT_GRAPHICS:
        cmd_buffer->state.pipeline = pipeline;
-       //cmd_buffer->state.vb_dirty |= pipeline->vb_used;
+       cmd_buffer->state.vertex_descriptors_dirty = true;
        cmd_buffer->state.dirty |= RADV_CMD_DIRTY_PIPELINE;
        cmd_buffer->state.descriptors_dirty |= pipeline->active_stages;
 

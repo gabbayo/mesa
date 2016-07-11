@@ -71,6 +71,7 @@ extern "C" {
 #endif
 
 #define MAX_VBS         32
+#define MAX_VERTEX_ATTRIBS 32
 #define MAX_SETS         8
 #define MAX_RTS          8
 #define MAX_VIEWPORTS   16
@@ -909,18 +910,6 @@ struct radv_device_memory {
    void *                                       map;
 };
 
-#if 0
-/**
- * Header for Vertex URB Entry (VUE)
- */
-struct anv_vue_header {
-   uint32_t Reserved;
-   uint32_t RTAIndex; /* RenderTargetArrayIndex */
-   uint32_t ViewportIndex;
-   float PointWidth;
-};
-#endif
-
 struct radv_descriptor_set_binding_layout {
    VkDescriptorType type;
 
@@ -1184,7 +1173,7 @@ struct anv_cmd_state {
    /* PIPELINE_SELECT.PipelineSelection */
    uint32_t                                     current_pipeline;
    const struct anv_l3_config *                 current_l3_config;
-   uint32_t                                     vb_dirty;
+   uint32_t                                     vertex_descriptors_dirty;
    anv_cmd_dirty_mask_t                         dirty;
    anv_cmd_dirty_mask_t                         compute_dirty;
    enum anv_pipe_bits                           pending_pipe_bits;
@@ -1225,7 +1214,8 @@ struct anv_cmd_state {
 #endif
 
 struct radv_cmd_state {
-    uint32_t                                     vb_dirty;
+    uint32_t                                      vb_dirty;
+    bool                                          vertex_descriptors_dirty;
     radv_cmd_dirty_mask_t                         dirty;
     radv_cmd_dirty_mask_t                         compute_dirty;
 
@@ -1460,12 +1450,20 @@ struct radv_pipeline {
    struct radv_shader_variant *                 shaders[MESA_SHADER_STAGES];
    VkShaderStageFlags                           active_stages;
 
+    uint32_t va_rsrc_word3[MAX_VERTEX_ATTRIBS];
+    uint32_t va_binding[MAX_VERTEX_ATTRIBS];
+    uint32_t num_vertex_attribs;
+   uint32_t                                     binding_stride[MAX_VBS];
+   bool                                         instancing_enable[MAX_VBS];
+
    union {
        struct {
 	   struct radv_blend_state blend;
 	   struct radv_depth_stencil_state ds;
 	   struct radv_raster_state raster;
+
            unsigned prim;
+           bool prim_restart_enable;
       } graphics;
        struct {
 	   int block_size[3];
@@ -1532,6 +1530,12 @@ radv_graphics_pipeline_create(VkDevice device,
                              const struct radv_graphics_pipeline_create_info *extra,
                              const VkAllocationCallbacks *alloc,
                              VkPipeline *pPipeline);
+
+struct vk_format_description;
+uint32_t radv_translate_buffer_dataformat(const struct vk_format_description *desc,
+					  int first_non_void);
+uint32_t radv_translate_buffer_numformat(const struct vk_format_description *desc,
+					 int first_non_void);
 #if 0
 struct anv_format_swizzle {
    enum isl_channel_select r:4;
