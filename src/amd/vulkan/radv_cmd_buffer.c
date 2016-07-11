@@ -111,12 +111,46 @@ static VkResult radv_create_cmd_buffer(
 							       RADEON_DOMAIN_GTT,
 							       RADEON_FLAG_CPU_ACCESS);
 
+   cmd_buffer->upload.map = device->ws->buffer_map(cmd_buffer->upload.upload_bo.bo);
+   cmd_buffer->upload.offset = 0;
    return VK_SUCCESS;
 
  fail:
    radv_free(&cmd_buffer->pool->alloc, cmd_buffer);
 
    return result;
+}
+
+void
+radv_cmd_buffer_upload_alloc(struct radv_cmd_buffer *cmd_buffer,
+			     unsigned size,
+			     unsigned alignment,
+			     unsigned *out_offset,
+			     void **ptr)
+{
+    if (cmd_buffer->upload.offset + size > RADV_CMD_BUFFER_UPLOAD_SIZE) {
+	fprintf(stderr, "time to implement larger upload buffer sizes.\n");
+	exit(-1);
+    }
+
+    *out_offset = cmd_buffer->upload.offset;
+    *ptr = cmd_buffer->upload.map + cmd_buffer->upload.offset;
+
+    cmd_buffer->upload.offset += size;
+}
+
+void
+radv_cmd_buffer_upload_data(struct radv_cmd_buffer *cmd_buffer,
+			    unsigned size, unsigned alignment,
+			    const void *data, unsigned *out_offset)
+{
+    uint8_t *ptr;
+
+    radv_cmd_buffer_upload_alloc(cmd_buffer, size, alignment,
+				 out_offset, (void **)&ptr);
+
+    if (ptr)
+	memcpy(ptr, data, size);
 }
 
 static void

@@ -1246,14 +1246,12 @@ struct radv_cmd_pool {
    struct list_head                             cmd_buffers;
 };
 
-#define RADV_CMD_BUFFER_BATCH_SIZE 8192
-
-enum radv_cmd_buffer_exec_mode {
-   RADV_CMD_BUFFER_EXEC_MODE_PRIMARY,
-   RADV_CMD_BUFFER_EXEC_MODE_EMIT,
-   RADV_CMD_BUFFER_EXEC_MODE_GROW_AND_EMIT,
-   RADV_CMD_BUFFER_EXEC_MODE_CHAIN,
-   RADV_CMD_BUFFER_EXEC_MODE_COPY_AND_CHAIN,
+#define RADV_CMD_BUFFER_UPLOAD_SIZE (1024*1024*1) /* 1MB initially */
+/* TODO linked list of these to grow later */
+struct radv_cmd_buffer_upload {
+    uint8_t *map;
+    unsigned offset;
+    struct radv_bo upload_bo;
 };
 
 struct radv_cmd_buffer {
@@ -1268,6 +1266,8 @@ struct radv_cmd_buffer {
    VkCommandBufferLevel                         level;
    struct radeon_winsys_cs *cs;
    struct radv_cmd_state state;
+
+    struct radv_cmd_buffer_upload upload;
 };
 
 void si_init_config(struct radv_physical_device *physical_device,
@@ -1277,6 +1277,17 @@ void si_write_viewport(struct radeon_winsys_cs *cs, int first_vp,
 void si_write_scissors(struct radeon_winsys_cs *cs, int first,
 		       int count, const VkRect2D *scissors);
 
+void
+radv_cmd_buffer_upload_alloc(struct radv_cmd_buffer *cmd_buffer,
+			     unsigned size,
+			     unsigned alignment,
+			     unsigned *out_offset,
+			     void **ptr);
+
+void
+radv_cmd_buffer_upload_data(struct radv_cmd_buffer *cmd_buffer,
+			    unsigned size, unsigned alignmnet,
+			    const void *data, unsigned *out_offset);
 #if 0
 VkResult anv_cmd_buffer_init_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
 void anv_cmd_buffer_fini_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
