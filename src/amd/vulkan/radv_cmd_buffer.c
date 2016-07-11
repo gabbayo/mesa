@@ -113,6 +113,9 @@ static VkResult radv_create_cmd_buffer(
 
    cmd_buffer->upload.map = device->ws->buffer_map(cmd_buffer->upload.upload_bo.bo);
    cmd_buffer->upload.offset = 0;
+
+   device->ws->cs_add_buffer(cmd_buffer->cs, cmd_buffer->upload.upload_bo.bo, 8);
+
    return VK_SUCCESS;
 
  fail:
