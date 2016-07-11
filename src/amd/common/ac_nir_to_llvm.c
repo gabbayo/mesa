@@ -54,6 +54,10 @@ struct nir_to_llvm_context {
 	LLVMValueRef vertex_buffers;
 	LLVMValueRef vertex_id;
 	LLVMValueRef base_vertex;
+
+	LLVMValueRef alpha_ref;
+	LLVMValueRef prim_mask;
+
 	LLVMBasicBlockRef continue_block;
 	LLVMBasicBlockRef break_block;
 
@@ -211,6 +215,11 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		sgpr_count = arg_idx;
 		arg_types[arg_idx++] = ctx->i32;
 		break;
+	case MESA_SHADER_FRAGMENT:
+		arg_types[arg_idx++] = ctx->f32; /* alpha ref */
+		arg_types[arg_idx++] = ctx->i32; /* prim mask */
+		sgpr_count = arg_idx;
+		break;
 	default:
 		unreachable("Shader stage not implemented");
 	}
@@ -237,6 +246,10 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		ctx->vertex_buffers = LLVMGetParam(ctx->main_function, arg_idx++);
 		ctx->base_vertex = LLVMGetParam(ctx->main_function, arg_idx++);
 		ctx->vertex_id = LLVMGetParam(ctx->main_function, arg_idx++);
+		break;
+	case MESA_SHADER_FRAGMENT:
+		ctx->alpha_ref = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->prim_mask = LLVMGetParam(ctx->main_function, arg_idx++);
 		break;
 	default:
 		unreachable("Shader stage not implemented");
@@ -878,8 +891,7 @@ handle_fs_input_decl(struct nir_to_llvm_context *ctx,
 	if (interp_param_idx == -1)
 		return;
 
-	interp_fs_input(ctx, variable, idx, interp_param,
-			LLVMGetParam(ctx->main_function, 0/*TODO SI_PARAM_PRIM_MASK*/),
+	interp_fs_input(ctx, variable, idx, interp_param, ctx->prim_mask,
 			&ctx->inputs[radeon_llvm_reg_index_soa(idx, 0)]);
 }
 
