@@ -251,7 +251,7 @@ static uint32_t radv_translate_texformat(struct radv_physical_device *physical_d
 static bool radv_is_sampler_format_supported(struct radv_physical_device *physical_device,
 					     VkFormat format)
 {
-   struct vk_format_description *desc = vk_format_description(format);
+   const struct vk_format_description *desc = vk_format_description(format);
    if (!desc || format == VK_FORMAT_UNDEFINED)
       return false;
    return radv_translate_texformat(physical_device, format, vk_format_description(format),

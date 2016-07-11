@@ -123,6 +123,7 @@ static void amdgpu_cs_add_buffer(struct radeon_winsys_cs *_cs,
    struct amdgpu_cs *cs = amdgpu_cs(_cs);
    struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
 
+   fprintf(stderr, "adding %lx, %lx\n", bo->size, bo->va);
    for (unsigned i = 0; i < cs->num_buffers; ++i) {
       if (cs->handles[i] == bo->bo) {
          cs->priorities[i] = MAX2(cs->priorities[i], priority);
@@ -165,6 +166,11 @@ static int amdgpu_winsys_cs_submit(struct radeon_winsys_ctx *_ctx,
    cs->request.resources = bo_list;
    cs->ib.size = cs->base.cdw;
 
+   if (getenv("RADV_DUMP_CS")) {
+     for (unsigned i = 0; i < cs->base.cdw; i++) {
+       fprintf(stderr, "0x%08x\n",cs->base.buf[i]);
+     }
+   }
    r = amdgpu_cs_submit(ctx->ctx, 0, &cs->request, 1);
    if (r) {
       if (r == -ENOMEM)

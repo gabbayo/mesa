@@ -119,6 +119,8 @@ void radv_DestroyRenderPass(
    RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_render_pass, pass, _pass);
 
+   if (!_pass)
+     return;
    radv_free2(&device->alloc, pAllocator, pass->subpass_attachments);
    radv_free2(&device->alloc, pAllocator, pass);
 }

@@ -641,7 +641,7 @@ emit_clear(struct radv_cmd_buffer *cmd_buffer,
    } else {
       assert(clear_att->aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT |
                                       VK_IMAGE_ASPECT_STENCIL_BIT));
-      emit_depthstencil_clear(cmd_buffer, clear_att, clear_rect);
+      //      emit_depthstencil_clear(cmd_buffer, clear_att, clear_rect);
    }
 }
 

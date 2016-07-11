@@ -61,6 +61,9 @@ void radv_DestroyPipeline(
 {
    RADV_FROM_HANDLE(radv_device, device, _device);
    RADV_FROM_HANDLE(radv_pipeline, pipeline, _pipeline);
+
+   if (!_pipeline)
+     return;
 #if 0
    radv_reloc_list_finish(&pipeline->batch_relocs,
                          pAllocator ? pAllocator : &device->alloc);
@@ -162,7 +165,7 @@ radv_shader_compile_to_nir(struct radv_device *device,
 
       nir_lower_system_values(nir);
       nir_validate_shader(nir);
-      nir_print_shader(nir, stderr);
+      //      nir_print_shader(nir, stderr);
    }
 
    /* Vulkan uses the separate-shader linking model */
@@ -183,6 +186,8 @@ radv_shader_compile_to_nir(struct radv_device *device,
    nir_lower_var_copies(nir);
    nir_lower_global_vars_to_local(nir);
    nir_remove_dead_variables(nir, nir_var_local);
+   nir_print_shader(nir, stderr);
+   
    return nir;
 }
 
@@ -317,6 +322,9 @@ radv_pipeline_init_depth_stencil_state(struct radv_pipeline *pipeline,
     const VkPipelineDepthStencilStateCreateInfo *vkds = pCreateInfo->pDepthStencilState;
     struct radv_depth_stencil_state *ds = &pipeline->graphics.ds;
 
+    memset(ds, 0, sizeof(*ds));
+    if (!vkds)
+        return;
     ds->db_depth_control = S_028800_Z_ENABLE(vkds->depthTestEnable) |
 	S_028800_Z_WRITE_ENABLE(vkds->depthWriteEnable) |
 	S_028800_ZFUNC(vkds->depthCompareOp) |
@@ -471,6 +479,8 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 			   pStages[MESA_SHADER_VERTEX]->pSpecializationInfo);
      pipeline->shaders[MESA_SHADER_VERTEX] = radv_shader_variant_create(device,
 									shader);
+     fprintf(stderr, "Assign VS %p to %p\n", pipeline->shaders[MESA_SHADER_VERTEX], pipeline);
+     pipeline->active_stages |= mesa_to_vk_shader_stage(MESA_SHADER_VERTEX);
    }
 
    if (modules[MESA_SHADER_FRAGMENT]) {
@@ -480,6 +490,8 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 			   pStages[MESA_SHADER_FRAGMENT]->pSpecializationInfo);
      pipeline->shaders[MESA_SHADER_FRAGMENT] = radv_shader_variant_create(device,
 									shader);
+     fprintf(stderr, "Assign FS %p to %p\n", pipeline->shaders[MESA_SHADER_FRAGMENT], pipeline);
+     pipeline->active_stages |= mesa_to_vk_shader_stage(MESA_SHADER_FRAGMENT);
    }
 
    radv_pipeline_init_blend_state(pipeline, pCreateInfo);
@@ -557,6 +569,7 @@ radv_graphics_pipeline_create(
    if (pipeline == NULL)
      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
+   memset(pipeline, 0, sizeof(*pipeline));
    result = radv_pipeline_init(pipeline, device, cache,
                               pCreateInfo, extra, pAllocator);
    if (result != VK_SUCCESS) {

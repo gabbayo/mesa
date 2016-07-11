@@ -136,7 +136,7 @@ radv_device_init_meta(struct radv_device *device)
    result = radv_device_init_meta_clear_state(device);
    if (result != VK_SUCCESS)
       goto fail_clear;
-
+#if 0 //TODO
    result = radv_device_init_meta_resolve_state(device);
    if (result != VK_SUCCESS)
       goto fail_resolve;
@@ -148,7 +148,7 @@ radv_device_init_meta(struct radv_device *device)
    result = radv_device_init_meta_blit2d_state(device);
    if (result != VK_SUCCESS)
       goto fail_blit2d;
-
+#endif
    return VK_SUCCESS;
 
 fail_blit2d:

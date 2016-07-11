@@ -75,6 +75,7 @@ struct nir_to_llvm_context {
 	LLVMValueRef i32one;
 	LLVMValueRef f32zero;
 	LLVMValueRef f32one;
+	LLVMValueRef v4f32empty;
 
 	unsigned uniform_md_kind;
 	LLVMValueRef empty_md;
@@ -258,7 +259,7 @@ static void create_function(struct nir_to_llvm_context *ctx,
 
 static void setup_types(struct nir_to_llvm_context *ctx)
 {
-	LLVMValueRef args[3];
+	LLVMValueRef args[4];
 
 	ctx->voidt = LLVMVoidTypeInContext(ctx->context);
 	ctx->i1 = LLVMIntTypeInContext(ctx->context, 1);
@@ -274,6 +275,12 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->i32one = LLVMConstInt(ctx->i32, 1, false);
 	ctx->f32zero = LLVMConstReal(ctx->f32, 0.0);
 	ctx->f32one = LLVMConstReal(ctx->f32, 1.0);
+
+	args[0] = ctx->f32zero;
+	args[1] = ctx->f32zero;
+	args[2] = ctx->f32zero;
+	args[3] = ctx->f32one;
+	ctx->v4f32empty = LLVMConstVector(args, 4);
 	args[0] = LLVMMDStringInContext(ctx->context, "const", 5);
 	args[1] = 0;
 	args[2] = LLVMConstInt(ctx->i32, 1, 0);
@@ -687,6 +694,17 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 	}
 }
 
+static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
+{
+	LLVMValueRef result = NULL;
+
+	result = ctx->v4f32empty;
+	if (result) {
+		assert(info->has_dest && instr->dest.is_ssa);
+		_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
+	}
+}
+
 static void visit_cf_list(struct nir_to_llvm_context *ctx,
                           struct exec_list *list);
 
@@ -704,6 +722,9 @@ static void visit_block(struct nir_to_llvm_context *ctx, nir_block *block)
 			break;
 		case nir_instr_type_intrinsic:
 			visit_intrinsic(ctx, nir_instr_as_intrinsic(instr));
+			break;
+		case nir_instr_type_tex:
+			visit_tex(ctx, nir_instr_as_tex(instr));
 			break;
 		default:
 			fprintf(stderr, "Unknown NIR instr type: ");
@@ -1204,7 +1225,6 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 	handle_shader_outputs_post(&ctx, nir);
 	LLVMBuildRetVoid(ctx.builder);
 
-	LLVMDumpModule(ctx.module);
 	ac_llvm_finalize_module(&ctx);
 	free(ctx.locals);
 	ralloc_free(ctx.defs);
