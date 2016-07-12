@@ -1217,6 +1217,15 @@ static void si_choose_spi_color_formats(struct radv_color_buffer_info *cb,
 	cb->spi_shader_col_format_blend_alpha = blend_alpha;
 }
 
+static inline unsigned
+si_tile_mode_index(const struct radv_image *image, unsigned level, bool stencil)
+{
+	if (stencil)
+		return image->surface.stencil_tiling_index[level];
+	else
+		return image->surface.tiling_index[level];
+}
+
 static void
 radv_initialise_color_surface(struct radv_device *device,
 			      struct radv_framebuffer *framebuffer,
@@ -1228,12 +1237,27 @@ radv_initialise_color_surface(struct radv_device *device,
     int i;
     unsigned ntype, format, swap, endian;
     unsigned blend_clamp = 0, blend_bypass = 0;
+    unsigned pitch_tile_max, slice_tile_max, tile_mode_index;
+    uint64_t va;
+    struct radeon_surf *surf = &iview->image->surface;
+    struct radeon_surf_level *level_info = &surf->level[iview->base_mip];
     
     memset(cb, 0, sizeof(*cb));
 
     cb->color_index = index;
+
+    va = device->ws->buffer_get_va(iview->bo->bo);
+    cb->cb_color_base = va >> 8;
+
     cb->cb_color_view = S_028C6C_SLICE_START(iview->base_layer) |
 	S_028C6C_SLICE_MAX(iview->base_layer + iview->extent.depth);
+
+    pitch_tile_max = level_info->nblk_x / 8 - 1;
+    slice_tile_max = level_info->nblk_x * level_info->nblk_y / 64 - 1;
+    tile_mode_index = si_tile_mode_index(iview->image, iview->base_mip, false);
+
+    cb->cb_color_pitch = S_028C64_TILE_MAX(pitch_tile_max);
+    cb->cb_color_slice = S_028C68_TILE_MAX(slice_tile_max);
 
     desc = vk_format_description(iview->vk_format);
     
@@ -1300,7 +1324,8 @@ radv_initialise_color_surface(struct radv_device *device,
 	S_028C70_ENDIAN(endian);
     
     /* Intensity is implemented as Red, so treat it that way. */
-    cb->cb_color_attrib = S_028C74_FORCE_DST_ALPHA_1(desc->swizzle[3] == VK_SWIZZLE_1);
+    cb->cb_color_attrib = S_028C74_FORCE_DST_ALPHA_1(desc->swizzle[3] == VK_SWIZZLE_1) |
+	S_028C74_TILE_MODE_INDEX(tile_mode_index);
 
     if (iview->image->samples > 1) {
 	radv_finishme("multisample");
@@ -1338,8 +1363,10 @@ radv_initialise_ds_surface(struct radv_device *device,
 			   struct radv_image_view *iview)
 {
     struct radv_ds_buffer_info *ds = &framebuffer->attachments[index].ds;
+    unsigned level = iview->base_mip;
     unsigned format;
-
+    uint64_t va, s_offs, z_offs;
+    struct radeon_surf_level *level_info = &iview->image->surface.level[level];
     memset(ds, 0, sizeof(*ds));
     switch (iview->vk_format) {
     case VK_FORMAT_D24_UNORM_S8_UINT:
@@ -1363,9 +1390,46 @@ radv_initialise_ds_surface(struct radv_device *device,
 	fprintf(stderr, "Invalid DB format: %d, disabling DB.\n", iview->vk_format);
     }
 
+    va = device->ws->buffer_get_va(iview->bo->bo);
+    s_offs = z_offs = va;
+    z_offs += iview->image->surface.level[level].offset;
+    s_offs += iview->image->surface.stencil_level[level].offset;
+
     ds->db_depth_info = S_02803C_ADDR5_SWIZZLE_MASK(1);
     ds->db_z_info = S_028040_FORMAT(format);
     ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);
+
+    if (device->instance->physicalDevice.rad_info.chip_class >= CIK) {
+	struct radeon_info *info = &device->instance->physicalDevice.info;
+	unsigned stencil_index = iview->image->surface.stencil_tiling_index[level];
+	unsigned macro_index = iview->image->surface.macro_tile_index;
+	unsigned tile_mode = info->si_tile_mode_array[index];
+	unsigned stencil_tile_mode = info->si_tile_mode_array[stencil_index];
+	unsigned macro_mode = info->cik_macrotile_mode_array[macro_index];
+
+	ds->db_depth_info |=
+	    S_02803C_ARRAY_MODE(G_009910_ARRAY_MODE(tile_mode)) |
+	    S_02803C_PIPE_CONFIG(G_009910_PIPE_CONFIG(tile_mode)) |
+	    S_02803C_BANK_WIDTH(G_009990_BANK_WIDTH(macro_mode)) |
+	    S_02803C_BANK_HEIGHT(G_009990_BANK_HEIGHT(macro_mode)) |
+	    S_02803C_MACRO_TILE_ASPECT(G_009990_MACRO_TILE_ASPECT(macro_mode)) |
+	    S_02803C_NUM_BANKS(G_009990_NUM_BANKS(macro_mode));
+	ds->db_z_info |= S_028040_TILE_SPLIT(G_009910_TILE_SPLIT(tile_mode));
+	ds->db_stencil_info |= S_028044_TILE_SPLIT(G_009910_TILE_SPLIT(stencil_tile_mode));
+    } else {
+	unsigned tile_mode_index = si_tile_mode_index(iview->image, level, false);
+	ds->db_z_info |= S_028040_TILE_MODE_INDEX(tile_mode_index);
+	tile_mode_index = si_tile_mode_index(iview->image, level, true);
+	ds->db_stencil_info |= S_028044_TILE_MODE_INDEX(tile_mode_index);
+    }
+
+
+    ds->db_z_read_base = ds->db_z_write_base = z_offs >> 8;
+    ds->db_stencil_read_base = ds->db_stencil_write_base = s_offs >> 8;
+
+    ds->db_depth_size = S_028058_PITCH_TILE_MAX((level_info->nblk_x / 8) - 1) |
+	S_028058_HEIGHT_TILE_MAX((level_info->nblk_y / 8) - 1);
+    ds->db_depth_slice = S_02805C_SLICE_TILE_MAX((level_info->nblk_x * level_info->nblk_y) / 64 - 1);
 }
 
 VkResult radv_CreateFramebuffer(

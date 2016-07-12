@@ -119,6 +119,7 @@ radv_image_view_init(struct radv_image_view *iview,
 		     VkImageUsageFlags usage_mask)
 {
    RADV_FROM_HANDLE(radv_image, image, pCreateInfo->image);
+   const VkImageSubresourceRange *range = &pCreateInfo->subresourceRange;
    switch (image->type) {
    default:
       unreachable("bad VkImageType");
@@ -133,7 +134,17 @@ radv_image_view_init(struct radv_image_view *iview,
    }
    iview->image = image;
    iview->bo = image->bo;
+
    iview->vk_format = pCreateInfo->format;
+   iview->aspect_mask = pCreateInfo->subresourceRange.aspectMask;
+
+   iview->extent = (VkExtent3D) {
+     .width  = radv_minify(image->extent.width , range->baseMipLevel),
+     .height = radv_minify(image->extent.height, range->baseMipLevel),
+     .depth  = radv_minify(image->extent.depth , range->baseMipLevel),
+   };
+   iview->base_layer = range->baseArrayLayer;
+   iview->base_mip = range->baseMipLevel;
 }
 
 VkResult
