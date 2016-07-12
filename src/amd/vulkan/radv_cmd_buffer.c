@@ -169,6 +169,7 @@ radv_emit_graphics_blend_state(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg_seq(cmd_buffer->cs, R_028780_CB_BLEND0_CONTROL, 8);
     radeon_emit_array(cmd_buffer->cs, pipeline->graphics.blend.cb_blend_control,
 		      8);
+    radeon_set_context_reg(cmd_buffer->cs, R_028808_CB_COLOR_CONTROL, pipeline->graphics.blend.cb_color_control);
 }
 
 static void
