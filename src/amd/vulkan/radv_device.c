@@ -1402,6 +1402,8 @@ radv_initialise_ds_surface(struct radv_device *device,
     z_offs += iview->image->surface.level[level].offset;
     s_offs += iview->image->surface.stencil_level[level].offset;
 
+    ds->db_depth_view = S_028008_SLICE_START(iview->base_layer) |
+      S_028008_SLICE_MAX(iview->base_layer + iview->extent.depth);
     ds->db_depth_info = S_02803C_ADDR5_SWIZZLE_MASK(1);
     ds->db_z_info = S_028040_FORMAT(format);
     ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);

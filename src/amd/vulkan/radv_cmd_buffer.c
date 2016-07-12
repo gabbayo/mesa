@@ -233,7 +233,7 @@ radv_emit_vertex_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_028A84_VGT_PRIMITIVEID_EN, 0);
 
     radeon_set_context_reg(cmd_buffer->cs, R_0286C4_SPI_VS_OUT_CONFIG, 0);
-    radeon_set_context_reg(cmd_buffer->cs, R_02870C_SPI_SHADER_POS_FORMAT, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_02870C_SPI_SHADER_POS_FORMAT, S_02870C_POS0_EXPORT_FORMAT(V_02870C_SPI_SHADER_4COMP));
 
     radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B120_SPI_SHADER_PGM_LO_VS, 4);
     radeon_emit(cmd_buffer->cs, va >> 8);
@@ -282,10 +282,11 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_0286D8_SPI_PS_IN_CONTROL, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_0286E0_SPI_BARYC_CNTL, spi_baryc_cntl);
 
-
     radeon_set_context_reg(cmd_buffer->cs, R_028710_SPI_SHADER_Z_FORMAT, V_028710_SPI_SHADER_ZERO);
 
     radeon_set_context_reg(cmd_buffer->cs, R_028714_SPI_SHADER_COL_FORMAT, V_028714_SPI_SHADER_32_ABGR);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028238_CB_TARGET_MASK, 0xf);
     radeon_set_context_reg(cmd_buffer->cs, R_02823C_CB_SHADER_MASK, 0xf);
 }
 
