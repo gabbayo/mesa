@@ -192,6 +192,8 @@ radv_emit_graphics_raster_state(struct radv_cmd_buffer *cmd_buffer,
 			   raster->pa_cl_clip_cntl);
     radeon_set_context_reg(cmd_buffer->cs, R_028814_PA_SU_SC_MODE_CNTL,
 			   raster->pa_su_sc_mode_cntl);
+    radeon_set_context_reg(cmd_buffer->cs, R_02881C_PA_CL_VS_OUT_CNTL,
+			   raster->pa_cl_vs_out_cntl);
 
     radeon_set_context_reg(cmd_buffer->cs, R_0286D4_SPI_INTERP_CONTROL_0,
 			   raster->spi_interp_control);
@@ -272,6 +274,9 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_emit(cmd_buffer->cs, ps->rsrc1);
     radeon_emit(cmd_buffer->cs, ps->rsrc2);
 
+    radeon_set_context_reg(cmd_buffer->cs, R_028000_DB_RENDER_CONTROL, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_028004_DB_COUNT_CONTROL, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_028010_DB_RENDER_OVERRIDE2, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_02880C_DB_SHADER_CONTROL, 0);
 
     radeon_set_context_reg(cmd_buffer->cs, R_0286CC_SPI_PS_INPUT_ENA,
@@ -443,6 +448,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 	  device->ws->cs_add_buffer(cmd_buffer->cs, buffer->bo->bo, 8);
 	  va = device->ws->buffer_get_va(buffer->bo->bo);
 
+	  va += buffer->offset;
 	  desc[0] = va;
 	  desc[1] = S_008F04_BASE_ADDRESS_HI(va >> 32) | S_008F04_STRIDE(stride);
 	  desc[2] = buffer->size;

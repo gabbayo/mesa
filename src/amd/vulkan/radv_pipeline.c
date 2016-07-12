@@ -379,6 +379,7 @@ radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
 	S_0286D4_PNT_SPRITE_OVRD_W(V_0286D4_SPI_PNT_SPRITE_SEL_1) |
 	S_0286D4_PNT_SPRITE_TOP_1(1); // TODO verify
 
+    raster->pa_cl_vs_out_cntl = S_02881C_VS_OUT_MISC_SIDE_BUS_ENA(1);
     raster->pa_cl_clip_cntl = S_028810_PS_UCP_MODE(3) |
 	S_028810_DX_CLIP_SPACE_DEF(1) | // TODO verify
 	S_028810_ZCLIP_NEAR_DISABLE(!vkraster->depthClampEnable) |

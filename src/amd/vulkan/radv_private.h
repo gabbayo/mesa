@@ -1425,6 +1425,7 @@ struct radv_blend_state {
 
 struct radv_raster_state {
     uint32_t pa_cl_clip_cntl;
+    uint32_t pa_cl_vs_out_cntl;
     uint32_t spi_interp_control;
     uint32_t pa_su_point_size;
     uint32_t pa_su_point_minmax;
