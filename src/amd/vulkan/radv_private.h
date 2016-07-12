@@ -1256,11 +1256,13 @@ struct radv_cmd_buffer {
    struct radeon_winsys_cs *cs;
    struct radv_cmd_state state;
 
-    struct radv_cmd_buffer_upload upload;
+   struct radv_bo border_color_bo;
+   struct radv_cmd_buffer_upload upload;
+   uint32_t texture_border_offset;
 };
 
 void si_init_config(struct radv_physical_device *physical_device,
-		    struct radeon_winsys_cs *cs);
+		    struct radv_cmd_buffer *cmd_buffer);
 void si_write_viewport(struct radeon_winsys_cs *cs, int first_vp,
 		       int count, const VkViewport *viewports);
 void si_write_scissors(struct radeon_winsys_cs *cs, int first,
