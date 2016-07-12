@@ -1252,6 +1252,8 @@ radv_initialise_color_surface(struct radv_device *device,
     va = device->ws->buffer_get_va(iview->bo->bo);
     cb->cb_color_base = va >> 8;
 
+    cb->cb_color_cmask = va >> 8;
+    cb->cb_color_fmask = va >> 8;
     cb->cb_color_view = S_028C6C_SLICE_START(iview->base_layer) |
 	S_028C6C_SLICE_MAX(iview->base_layer + iview->extent.depth);
 
@@ -1262,6 +1264,8 @@ radv_initialise_color_surface(struct radv_device *device,
     cb->cb_color_pitch = S_028C64_TILE_MAX(pitch_tile_max);
     cb->cb_color_slice = S_028C68_TILE_MAX(slice_tile_max);
 
+    cb->cb_color_pitch |= S_028C64_FMASK_TILE_MAX(pitch_tile_max);
+    cb->cb_color_fmask_slice = S_028C88_TILE_MAX(slice_tile_max);
     desc = vk_format_description(iview->vk_format);
     
     for (i = 0; i < 4; i++) {
@@ -1327,7 +1331,7 @@ radv_initialise_color_surface(struct radv_device *device,
 	S_028C70_ENDIAN(endian);
     
     /* Intensity is implemented as Red, so treat it that way. */
-    cb->cb_color_attrib = S_028C74_FORCE_DST_ALPHA_1(desc->swizzle[3] == VK_SWIZZLE_1) |
+    cb->cb_color_attrib = S_028C74_FORCE_DST_ALPHA_1(desc->swizzle[3] == VK_SWIZZLE_1) | S_028C74_FMASK_TILE_MODE_INDEX(tile_mode_index) |
 	S_028C74_TILE_MODE_INDEX(tile_mode_index);
 
     if (iview->image->samples > 1) {
