@@ -288,7 +288,7 @@ static void
 radv_emit_fb_color_state(struct radv_cmd_buffer *cmd_buffer,
 			 struct radv_color_buffer_info *cb)
 {
-    bool is_vi = cmd_buffer->device->instance->physicalDevice.info->chip_class >= VI;
+    bool is_vi = cmd_buffer->device->instance->physicalDevice.rad_info.chip_class >= VI;
     radeon_set_context_reg_seq(cmd_buffer->cs, R_028C60_CB_COLOR0_BASE + cb->color_index * 0x3c, is_vi ? 14 : 13);
     radeon_emit(cmd_buffer->cs, cb->cb_color_base);
     radeon_emit(cmd_buffer->cs, cb->cb_color_pitch);
@@ -982,8 +982,9 @@ void radv_CmdDispatch(
 void radv_CmdEndRenderPass(
     VkCommandBuffer                             commandBuffer)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+  RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
 
+  si_emit_cache_flush(cmd_buffer);
    //   radv_cmd_buffer_resolve_subpass(cmd_buffer);
 }
 

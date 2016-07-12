@@ -1403,7 +1403,7 @@ radv_initialise_ds_surface(struct radv_device *device,
     ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);
 
     if (device->instance->physicalDevice.rad_info.chip_class >= CIK) {
-	struct radeon_info *info = &device->instance->physicalDevice.info;
+	struct radeon_info *info = &device->instance->physicalDevice.rad_info;
 	unsigned stencil_index = iview->image->surface.stencil_tiling_index[level];
 	unsigned macro_index = iview->image->surface.macro_tile_index;
 	unsigned tile_mode = info->si_tile_mode_array[index];

@@ -532,7 +532,6 @@ struct radv_physical_device {
    uint32_t                                    chipset_id;
    char                                        path[20];
    const char *                                name;
-   const struct radv_device_info *             info;
    uint64_t                                    aperture_size;
    int                                         cmd_parser_version;
    uint32_t                    pci_vendor_id;
@@ -1267,6 +1266,7 @@ void si_write_viewport(struct radeon_winsys_cs *cs, int first_vp,
 void si_write_scissors(struct radeon_winsys_cs *cs, int first,
 		       int count, const VkRect2D *scissors);
 uint32_t si_get_ia_multi_vgt_param(struct radv_cmd_buffer *cmd_buffer);
+void si_emit_cache_flush(struct radv_cmd_buffer *cmd_buffer);
 void
 radv_cmd_buffer_upload_alloc(struct radv_cmd_buffer *cmd_buffer,
 			     unsigned size,
