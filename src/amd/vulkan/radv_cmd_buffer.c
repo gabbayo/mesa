@@ -370,7 +370,8 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 {
     struct radv_pipeline *pipeline = cmd_buffer->state.pipeline;
     struct radv_device *device = cmd_buffer->device;
-
+    uint32_t ia_multi_vgt_param;
+    uint32_t ls_hs_config = 0;
     if (cmd_buffer->state.vertex_descriptors_dirty || cmd_buffer->state.vb_dirty) {
       unsigned vb_offset;
       void *vb_ptr;
@@ -418,6 +419,13 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 
     if (cmd_buffer->state.dirty & RADV_CMD_DIRTY_DYNAMIC_SCISSOR)
         radv_emit_scissor(cmd_buffer);
+
+    ia_multi_vgt_param = si_get_ia_multi_vgt_param(cmd_buffer);
+    /* TODO CIK only */
+    radeon_emit(cmd_buffer->cs, PKT3(PKT3_DRAW_PREAMBLE, 2, 0));
+    radeon_emit(cmd_buffer->cs, cmd_buffer->state.pipeline->graphics.prim); /* VGT_PRIMITIVE_TYPE */
+    radeon_emit(cmd_buffer->cs, ia_multi_vgt_param); /* IA_MULTI_VGT_PARAM */
+    radeon_emit(cmd_buffer->cs, ls_hs_config); /* VGT_LS_HS_CONFIG */
 
     radv_cmd_buffer_flush_dynamic_state(cmd_buffer);
 }
@@ -909,6 +917,14 @@ void radv_CmdDraw(
 {
     RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
     radv_cmd_buffer_flush_state(cmd_buffer);
+
+    radeon_emit(cmd_buffer->cs, PKT3(PKT3_NUM_INSTANCES, 0, 0));
+    radeon_emit(cmd_buffer->cs, instanceCount);
+
+    radeon_emit(cmd_buffer->cs, PKT3(PKT3_DRAW_INDEX_AUTO, 1, 0));
+    radeon_emit(cmd_buffer->cs, vertexCount);
+    radeon_emit(cmd_buffer->cs, V_0287F0_DI_SRC_SEL_AUTO_INDEX |
+		S_0287F0_USE_OPAQUE(0));//!!info->count_from_stream_output));
 }
 
 void radv_CmdDrawIndexed(

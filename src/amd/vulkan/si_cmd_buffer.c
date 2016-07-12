@@ -436,3 +436,91 @@ si_write_scissors(struct radeon_winsys_cs *cs, int first,
 
 
 }
+
+uint32_t
+si_get_ia_multi_vgt_param(struct radv_cmd_buffer *cmd_buffer)
+{
+    enum chip_class chip_class = cmd_buffer->device->instance->physicalDevice.rad_info.chip_class;
+    struct radeon_info *info = &cmd_buffer->device->instance->physicalDevice.rad_info;
+    unsigned prim = cmd_buffer->state.pipeline->graphics.prim;
+    unsigned primgroup_size = 128; /* recommended without a GS */
+    unsigned max_primgroup_in_wave = 2;
+    /* SWITCH_ON_EOP(0) is always preferable. */
+    bool wd_switch_on_eop = false;
+    bool ia_switch_on_eop = false;
+    bool ia_switch_on_eoi = false;
+    bool partial_vs_wave = false;
+    bool partial_es_wave = false;
+
+    /* TODO GS */
+
+    /* TODO TES */
+
+    /* TODO linestipple */
+
+    if (chip_class >= CIK) {
+	/* WD_SWITCH_ON_EOP has no effect on GPUs with less than
+	 * 4 shader engines. Set 1 to pass the assertion below.
+	 * The other cases are hardware requirements. */
+	if (info->max_se < 4 ||
+	    prim == V_008958_DI_PT_POLYGON ||
+	    prim == V_008958_DI_PT_LINELOOP ||
+	    prim == V_008958_DI_PT_TRIFAN ||
+	    prim == V_008958_DI_PT_TRISTRIP_ADJ)
+	    //	    info->primitive_restart ||
+	    //	    info->count_from_stream_output)
+	    wd_switch_on_eop = true;
+
+	/* TODO HAWAII */
+
+	/* Required on CIK and later. */
+	if (info->max_se > 2 && !wd_switch_on_eop)
+	    ia_switch_on_eoi = true;
+
+	/* Required by Hawaii and, for some special cases, by VI. */
+#if 0
+	if (ia_switch_on_eoi &&
+	    (sctx->b.family == CHIP_HAWAII ||
+	     (sctx->b.chip_class == VI &&
+	      (sctx->gs_shader.cso || max_primgroup_in_wave != 2))))
+	    partial_vs_wave = true;
+#endif
+
+#if 0
+	/* Instancing bug on Bonaire. */
+	if (sctx->b.family == CHIP_BONAIRE && ia_switch_on_eoi &&
+	    (info->indirect || info->instance_count > 1))
+	    partial_vs_wave = true;
+#endif
+	/* If the WD switch is false, the IA switch must be false too. */
+	assert(wd_switch_on_eop || !ia_switch_on_eop);
+    }
+    /* If SWITCH_ON_EOI is set, PARTIAL_ES_WAVE must be set too. */
+    if (ia_switch_on_eoi)
+	partial_es_wave = true;
+
+    /* GS requirement. */
+#if 0
+    if (SI_GS_PER_ES / primgroup_size >= sctx->screen->gs_table_depth - 3)
+	partial_es_wave = true;
+#endif
+
+    /* Hw bug with single-primitive instances and SWITCH_ON_EOI
+     * on multi-SE chips. */
+#if 0
+    if (sctx->b.screen->info.max_se >= 2 && ia_switch_on_eoi &&
+	(info->indirect ||
+	 (info->instance_count > 1 &&
+	  si_num_prims_for_vertices(info) <= 1)))
+	sctx->b.flags |= SI_CONTEXT_VGT_FLUSH;
+#endif
+    return S_028AA8_SWITCH_ON_EOP(ia_switch_on_eop) |
+	S_028AA8_SWITCH_ON_EOI(ia_switch_on_eoi) |
+	S_028AA8_PARTIAL_VS_WAVE_ON(partial_vs_wave) |
+	S_028AA8_PARTIAL_ES_WAVE_ON(partial_es_wave) |
+	S_028AA8_PRIMGROUP_SIZE(primgroup_size - 1) |
+	S_028AA8_WD_SWITCH_ON_EOP(chip_class >= CIK ? wd_switch_on_eop : 0) |
+	S_028AA8_MAX_PRIMGRP_IN_WAVE(chip_class >= VI ?
+				     max_primgroup_in_wave : 0);
+
+}

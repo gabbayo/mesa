@@ -1266,7 +1266,7 @@ void si_write_viewport(struct radeon_winsys_cs *cs, int first_vp,
 		       int count, const VkViewport *viewports);
 void si_write_scissors(struct radeon_winsys_cs *cs, int first,
 		       int count, const VkRect2D *scissors);
-
+uint32_t si_get_ia_multi_vgt_param(struct radv_cmd_buffer *cmd_buffer);
 void
 radv_cmd_buffer_upload_alloc(struct radv_cmd_buffer *cmd_buffer,
 			     unsigned size,
