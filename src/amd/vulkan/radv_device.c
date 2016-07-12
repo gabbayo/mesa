@@ -41,7 +41,10 @@ radv_physical_device_init(struct radv_physical_device *device,
    strncpy(device->path, path, ARRAY_SIZE(device->path));
 
    device->ws = amdgpu_winsys_create(fd);
-
+   if (!device->ws) {
+       result = VK_ERROR_INCOMPATIBLE_DRIVER;
+       goto fail;
+   }
    device->ws->query_info(device->ws, &device->rad_info);
    result = radv_init_wsi(device);
    if (result != VK_SUCCESS)
