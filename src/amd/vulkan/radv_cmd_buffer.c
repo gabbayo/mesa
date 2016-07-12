@@ -476,6 +476,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
     if (cmd_buffer->state.dirty & RADV_CMD_DIRTY_DYNAMIC_SCISSOR)
         radv_emit_scissor(cmd_buffer);
 
+    radeon_set_context_reg(cmd_buffer->cs, R_028B54_VGT_SHADER_STAGES_EN, 0);
     ia_multi_vgt_param = si_get_ia_multi_vgt_param(cmd_buffer);
     /* TODO CIK only */
     radeon_emit(cmd_buffer->cs, PKT3(PKT3_DRAW_PREAMBLE, 2, 0));
