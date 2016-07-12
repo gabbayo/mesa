@@ -462,7 +462,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
       va = device->ws->buffer_get_va(cmd_buffer->upload.upload_bo.bo);
       va += vb_offset;
       radeon_set_sh_reg_seq(cmd_buffer->cs,
-			    R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
+			    R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 4, 2);
       radeon_emit(cmd_buffer->cs, va);
       radeon_emit(cmd_buffer->cs, va >> 32);
     }
