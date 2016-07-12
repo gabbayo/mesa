@@ -342,7 +342,9 @@ radv_emit_framebuffer_state(struct radv_cmd_buffer *cmd_buffer)
     int i;
     struct radv_framebuffer *framebuffer = cmd_buffer->state.framebuffer;
     for (i = 0; i < framebuffer->attachment_count; i++) {
-	struct radv_attachment_info *att = &framebuffer->attachments[0];
+	struct radv_attachment_info *att = &framebuffer->attachments[i];
+
+	cmd_buffer->device->ws->cs_add_buffer(cmd_buffer->cs, att->attachment->bo->bo, 8);
 
 	if (att->attachment->aspect_mask & VK_IMAGE_ASPECT_COLOR_BIT) {
 	    radv_emit_fb_color_state(cmd_buffer, &att->cb);
@@ -391,6 +393,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 	  struct radv_buffer *buffer = cmd_buffer->state.vertex_bindings[vb].buffer;
 	  uint32_t stride = cmd_buffer->state.pipeline->binding_stride[vb];
 
+	  device->ws->cs_add_buffer(cmd_buffer->cs, buffer->bo->bo, 8);
 	  va = device->ws->buffer_get_va(buffer->bo->bo);
 
 	  desc[0] = va;
