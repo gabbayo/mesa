@@ -235,7 +235,15 @@ radv_emit_vertex_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_emit(cmd_buffer->cs, va >> 40);
     radeon_emit(cmd_buffer->cs, vs->rsrc1);
     radeon_emit(cmd_buffer->cs, vs->rsrc2);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028818_PA_CL_VTE_CNTL,
+			       S_028818_VTX_W0_FMT(1) |
+			       S_028818_VPORT_X_SCALE_ENA(1) | S_028818_VPORT_X_OFFSET_ENA(1) |
+			       S_028818_VPORT_Y_SCALE_ENA(1) | S_028818_VPORT_Y_OFFSET_ENA(1) |
+			       S_028818_VPORT_Z_SCALE_ENA(1) | S_028818_VPORT_Z_OFFSET_ENA(1));
 }
+
+
 
 static void
 radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
@@ -244,6 +252,7 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     struct radeon_winsys *ws = cmd_buffer->device->ws;
     struct radv_shader_variant *ps;
     uint64_t va;
+    unsigned spi_baryc_cntl = S_0286E0_FRONT_FACE_ALL_BITS(1);
 
     assert (pipeline->shaders[MESA_SHADER_FRAGMENT]);
 
@@ -256,6 +265,23 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_emit(cmd_buffer->cs, va >> 40);
     radeon_emit(cmd_buffer->cs, ps->rsrc1);
     radeon_emit(cmd_buffer->cs, ps->rsrc2);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_02880C_DB_SHADER_CONTROL, 0);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_0286CC_SPI_PS_INPUT_ENA,
+			   S_0286CC_LINEAR_CENTER_ENA(1));
+    radeon_set_context_reg(cmd_buffer->cs, R_0286D0_SPI_PS_INPUT_ADDR,
+			   0);
+
+    spi_baryc_cntl |= S_0286E0_POS_FLOAT_LOCATION(2);
+    radeon_set_context_reg(cmd_buffer->cs, R_0286D8_SPI_PS_IN_CONTROL, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_0286E0_SPI_BARYC_CNTL, spi_baryc_cntl);
+
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028710_SPI_SHADER_Z_FORMAT, V_028710_SPI_SHADER_ZERO);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028714_SPI_SHADER_COL_FORMAT, V_028714_SPI_SHADER_32_ABGR);
+    radeon_set_context_reg(cmd_buffer->cs, R_02823C_CB_SHADER_MASK, 0xf);
 }
 
 static void
