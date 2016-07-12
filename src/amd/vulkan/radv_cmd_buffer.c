@@ -341,17 +341,31 @@ radv_emit_framebuffer_state(struct radv_cmd_buffer *cmd_buffer)
 {
     int i;
     struct radv_framebuffer *framebuffer = cmd_buffer->state.framebuffer;
+    int color_count = 0;
+    bool has_ds = false;
     for (i = 0; i < framebuffer->attachment_count; i++) {
 	struct radv_attachment_info *att = &framebuffer->attachments[i];
 
 	cmd_buffer->device->ws->cs_add_buffer(cmd_buffer->cs, att->attachment->bo->bo, 8);
 
 	if (att->attachment->aspect_mask & VK_IMAGE_ASPECT_COLOR_BIT) {
+	    color_count++;
 	    radv_emit_fb_color_state(cmd_buffer, &att->cb);
-	} else
+	} else {
 	    radv_emit_fb_ds_state(cmd_buffer, &att->ds);
+	    has_ds = true;
+	}
     }
 
+    for (i = color_count; i < 8; i++)
+      radeon_set_context_reg(cmd_buffer->cs, R_028C70_CB_COLOR0_INFO + i * 0x3C,
+			     S_028C70_FORMAT(V_028C70_COLOR_INVALID));
+
+    if (!has_ds) {
+      radeon_set_context_reg_seq(cmd_buffer->cs, R_028040_DB_Z_INFO, 2);
+      radeon_emit(cmd_buffer->cs, S_028040_FORMAT(V_028040_Z_INVALID)); /* R_028040_DB_Z_INFO */
+      radeon_emit(cmd_buffer->cs, S_028044_FORMAT(V_028044_STENCIL_INVALID)); /* R_028044_DB_STENCIL_INFO */
+    }
     radeon_set_context_reg(cmd_buffer->cs, R_028208_PA_SC_WINDOW_SCISSOR_BR,
 			       S_028208_BR_X(framebuffer->width) |
 			   S_028208_BR_Y(framebuffer->height));
