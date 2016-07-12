@@ -334,7 +334,7 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
    const struct radv_framebuffer *fb = cmd_buffer->state.framebuffer;
    const uint32_t subpass_att = clear_att->colorAttachment;
    const uint32_t pass_att = subpass->color_attachments[subpass_att];
-   const struct radv_image_view *iview = fb->attachments[pass_att];
+   const struct radv_image_view *iview = fb->attachments[pass_att].attachment;
    const uint32_t samples = iview->image->samples;
    const uint32_t samples_log2 = ffs(samples) - 1;
    struct radv_pipeline *pipeline =
@@ -493,7 +493,7 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
    const struct radv_subpass *subpass = cmd_buffer->state.subpass;
    const struct radv_framebuffer *fb = cmd_buffer->state.framebuffer;
    const uint32_t pass_att = subpass->depth_stencil_attachment;
-   const struct radv_image_view *iview = fb->attachments[pass_att];
+   const struct radv_image_view *iview = fb->attachments[pass_att].attachment;
    const uint32_t samples = iview->image->samples;
    const uint32_t samples_log2 = ffs(samples) - 1;
    VkClearDepthStencilValue clear_value = clear_att->clearValue.depthStencil;

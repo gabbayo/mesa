@@ -1536,6 +1536,10 @@ uint32_t radv_translate_buffer_dataformat(const struct vk_format_description *de
 					  int first_non_void);
 uint32_t radv_translate_buffer_numformat(const struct vk_format_description *desc,
 					 int first_non_void);
+uint32_t radv_translate_colorformat(VkFormat format);
+uint32_t radv_colorformat_endian_swap(uint32_t colorformat);
+unsigned radv_translate_colorswap(VkFormat format, bool do_endian_swap);
+uint32_t radv_translate_dbformat(VkFormat format);
 #if 0
 struct anv_format_swizzle {
    enum isl_channel_select r:4;
@@ -1751,6 +1755,52 @@ struct radv_sampler {
    uint32_t state[4];
 };
 
+struct radv_color_buffer_info {
+    uint32_t color_index;
+    uint32_t cb_color_base;
+    uint32_t cb_color_pitch;
+    uint32_t cb_color_slice;
+    uint32_t cb_color_view;
+    uint32_t cb_color_info;
+    uint32_t cb_color_attrib;
+    uint32_t cb_dcc_control;
+    uint32_t cb_color_cmask;
+    uint32_t cb_color_cmask_slice;
+    uint32_t cb_color_fmask;
+    uint32_t cb_color_fmask_slice;
+    uint32_t cb_clear_value0;
+    uint32_t cb_clear_value1;
+    uint32_t spi_shader_col_format;
+    uint32_t spi_shader_col_format_alpha;
+    uint32_t spi_shader_col_format_blend;
+    uint32_t spi_shader_col_format_blend_alpha;
+};
+
+struct radv_ds_buffer_info {
+    uint32_t db_depth_info;
+    uint32_t db_z_info;
+    uint32_t db_stencil_info;
+    uint32_t db_z_read_base;
+    uint32_t db_stencil_read_base;
+    uint32_t db_z_write_base;
+    uint32_t db_stencil_write_base;
+    uint32_t db_depth_view;
+    uint32_t db_depth_size;
+    uint32_t db_depth_slice;
+    uint32_t db_stencil_clear;
+    uint32_t db_depth_clear;
+    uint32_t db_htile_surface;
+    uint32_t db_htile_data_base;
+    uint32_t pa_su_poly_offset_db_fmt_cntl;
+};
+
+struct radv_attachment_info {
+    union {
+	struct radv_color_buffer_info cb;
+	struct radv_ds_buffer_info ds;
+    };
+    struct radv_image_view *attachment;
+};
 
 struct radv_framebuffer {
    uint32_t                                     width;
@@ -1758,7 +1808,7 @@ struct radv_framebuffer {
    uint32_t                                     layers;
 
    uint32_t                                     attachment_count;
-   struct radv_image_view *                      attachments[0];
+   struct radv_attachment_info                  attachments[0];
 };
 
    

@@ -10,6 +10,8 @@
 #include "amdgpu_id.h"
 #include "winsys/amdgpu/radv_amdgpu_winsys_public.h"
 #include "ac_llvm_util.h"
+#include "vk_format.h"
+#include "sid.h"
 struct radv_dispatch_table dtable;
 
 
@@ -1098,6 +1100,273 @@ void radv_DestroyBuffer(
    radv_free2(&device->alloc, pAllocator, buffer);
 }
 
+static void si_choose_spi_color_formats(struct radv_color_buffer_info *cb,
+					unsigned format, unsigned swap,
+					unsigned ntype, bool is_depth)
+{
+	/* Alpha is needed for alpha-to-coverage.
+	 * Blending may be with or without alpha.
+	 */
+	unsigned normal = 0; /* most optimal, may not support blending or export alpha */
+	unsigned alpha = 0; /* exports alpha, but may not support blending */
+	unsigned blend = 0; /* supports blending, but may not export alpha */
+	unsigned blend_alpha = 0; /* least optimal, supports blending and exports alpha */
+
+	/* Choose the SPI color formats. These are required values for Stoney/RB+.
+	 * Other chips have multiple choices, though they are not necessarily better.
+	 */
+	switch (format) {
+	case V_028C70_COLOR_5_6_5:
+	case V_028C70_COLOR_1_5_5_5:
+	case V_028C70_COLOR_5_5_5_1:
+	case V_028C70_COLOR_4_4_4_4:
+	case V_028C70_COLOR_10_11_11:
+	case V_028C70_COLOR_11_11_10:
+	case V_028C70_COLOR_8:
+	case V_028C70_COLOR_8_8:
+	case V_028C70_COLOR_8_8_8_8:
+	case V_028C70_COLOR_10_10_10_2:
+	case V_028C70_COLOR_2_10_10_10:
+		if (ntype == V_028C70_NUMBER_UINT)
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_UINT16_ABGR;
+		else if (ntype == V_028C70_NUMBER_SINT)
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_SINT16_ABGR;
+		else
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_FP16_ABGR;
+		break;
+
+	case V_028C70_COLOR_16:
+	case V_028C70_COLOR_16_16:
+	case V_028C70_COLOR_16_16_16_16:
+		if (ntype == V_028C70_NUMBER_UNORM ||
+		    ntype == V_028C70_NUMBER_SNORM) {
+			/* UNORM16 and SNORM16 don't support blending */
+			if (ntype == V_028C70_NUMBER_UNORM)
+				normal = alpha = V_028714_SPI_SHADER_UNORM16_ABGR;
+			else
+				normal = alpha = V_028714_SPI_SHADER_SNORM16_ABGR;
+
+			/* Use 32 bits per channel for blending. */
+			if (format == V_028C70_COLOR_16) {
+				if (swap == V_028C70_SWAP_STD) { /* R */
+					blend = V_028714_SPI_SHADER_32_R;
+					blend_alpha = V_028714_SPI_SHADER_32_AR;
+				} else if (swap == V_028C70_SWAP_ALT_REV) /* A */
+					blend = blend_alpha = V_028714_SPI_SHADER_32_AR;
+				else
+					assert(0);
+			} else if (format == V_028C70_COLOR_16_16) {
+				if (swap == V_028C70_SWAP_STD) { /* RG */
+					blend = V_028714_SPI_SHADER_32_GR;
+					blend_alpha = V_028714_SPI_SHADER_32_ABGR;
+				} else if (swap == V_028C70_SWAP_ALT) /* RA */
+					blend = blend_alpha = V_028714_SPI_SHADER_32_AR;
+				else
+					assert(0);
+			} else /* 16_16_16_16 */
+				blend = blend_alpha = V_028714_SPI_SHADER_32_ABGR;
+		} else if (ntype == V_028C70_NUMBER_UINT)
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_UINT16_ABGR;
+		else if (ntype == V_028C70_NUMBER_SINT)
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_SINT16_ABGR;
+		else if (ntype == V_028C70_NUMBER_FLOAT)
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_FP16_ABGR;
+		else
+			assert(0);
+		break;
+
+	case V_028C70_COLOR_32:
+		if (swap == V_028C70_SWAP_STD) { /* R */
+			blend = normal = V_028714_SPI_SHADER_32_R;
+			alpha = blend_alpha = V_028714_SPI_SHADER_32_AR;
+		} else if (swap == V_028C70_SWAP_ALT_REV) /* A */
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_32_AR;
+		else
+			assert(0);
+		break;
+
+	case V_028C70_COLOR_32_32:
+		if (swap == V_028C70_SWAP_STD) { /* RG */
+			blend = normal = V_028714_SPI_SHADER_32_GR;
+			alpha = blend_alpha = V_028714_SPI_SHADER_32_ABGR;
+		} else if (swap == V_028C70_SWAP_ALT) /* RA */
+			alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_32_AR;
+		else
+			assert(0);
+		break;
+
+	case V_028C70_COLOR_32_32_32_32:
+	case V_028C70_COLOR_8_24:
+	case V_028C70_COLOR_24_8:
+	case V_028C70_COLOR_X24_8_32_FLOAT:
+		alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_32_ABGR;
+		break;
+
+	default:
+		assert(0);
+		return;
+	}
+
+	/* The DB->CB copy needs 32_ABGR. */
+	if (is_depth)
+		alpha = blend = blend_alpha = normal = V_028714_SPI_SHADER_32_ABGR;
+
+	cb->spi_shader_col_format = normal;
+	cb->spi_shader_col_format_alpha = alpha;
+	cb->spi_shader_col_format_blend = blend;
+	cb->spi_shader_col_format_blend_alpha = blend_alpha;
+}
+
+static void
+radv_initialise_color_surface(struct radv_device *device,
+			      struct radv_framebuffer *framebuffer,
+			      int index,
+			      struct radv_image_view *iview)
+{
+    struct radv_color_buffer_info *cb = &framebuffer->attachments[index].cb;
+    struct vk_format_description *desc;
+    int i;
+    unsigned ntype, format, swap, endian;
+    unsigned blend_clamp = 0, blend_bypass = 0;
+    
+    memset(cb, 0, sizeof(*cb));
+
+    cb->color_index = index;
+    cb->cb_color_view = S_028C6C_SLICE_START(iview->base_layer) |
+	S_028C6C_SLICE_MAX(iview->base_layer + iview->extent.depth);
+
+    desc = vk_format_description(iview->vk_format);
+    
+    for (i = 0; i < 4; i++) {
+	if (desc->channel[i].type != VK_FORMAT_TYPE_VOID) {
+	    break;
+	}
+    }
+    if (i == 4 || desc->channel[i].type == VK_FORMAT_TYPE_FLOAT) {
+	ntype = V_028C70_NUMBER_FLOAT;
+    } else {
+	ntype = V_028C70_NUMBER_UNORM;
+	if (desc->colorspace == VK_FORMAT_COLORSPACE_SRGB)
+	    ntype = V_028C70_NUMBER_SRGB;
+	else if (desc->channel[i].type == VK_FORMAT_TYPE_SIGNED) {
+	    if (desc->channel[i].pure_integer) {
+		ntype = V_028C70_NUMBER_SINT;
+	    } else {
+		assert(desc->channel[i].normalized);
+		ntype = V_028C70_NUMBER_SNORM;
+	    }
+	} else if (desc->channel[i].type == VK_FORMAT_TYPE_UNSIGNED) {
+	    if (desc->channel[i].pure_integer) {
+		ntype = V_028C70_NUMBER_UINT;
+	    } else {
+		assert(desc->channel[i].normalized);
+		ntype = V_028C70_NUMBER_UNORM;
+	    }
+	}
+    }
+
+    format = radv_translate_colorformat(iview->vk_format);
+    if (format == V_028C70_COLOR_INVALID)
+	radv_finishme("Illegal color\n");
+    swap = radv_translate_colorswap(iview->vk_format, FALSE);
+    endian = radv_colorformat_endian_swap(format);
+
+    /* blend clamp should be set for all NORM/SRGB types */
+    if (ntype == V_028C70_NUMBER_UNORM ||
+	ntype == V_028C70_NUMBER_SNORM ||
+	ntype == V_028C70_NUMBER_SRGB)
+	blend_clamp = 1;
+
+    /* set blend bypass according to docs if SINT/UINT or
+       8/24 COLOR variants */
+    if (ntype == V_028C70_NUMBER_UINT || ntype == V_028C70_NUMBER_SINT ||
+	format == V_028C70_COLOR_8_24 || format == V_028C70_COLOR_24_8 ||
+	format == V_028C70_COLOR_X24_8_32_FLOAT) {
+	blend_clamp = 0;
+	blend_bypass = 1;
+    }
+#if 0
+    if ((ntype == V_028C70_NUMBER_UINT || ntype == V_028C70_NUMBER_SINT) &&
+	(format == V_028C70_COLOR_8 ||
+	 format == V_028C70_COLOR_8_8 ||
+	 format == V_028C70_COLOR_8_8_8_8))
+	->color_is_int8 = true;
+#endif
+    cb->cb_color_info = S_028C70_FORMAT(format) |
+	S_028C70_COMP_SWAP(swap) |
+	S_028C70_BLEND_CLAMP(blend_clamp) |
+	S_028C70_BLEND_BYPASS(blend_bypass) |
+	S_028C70_NUMBER_TYPE(ntype) |
+	S_028C70_ENDIAN(endian);
+    
+    /* Intensity is implemented as Red, so treat it that way. */
+    cb->cb_color_attrib = S_028C74_FORCE_DST_ALPHA_1(desc->swizzle[3] == VK_SWIZZLE_1);
+
+    if (iview->image->samples > 1) {
+	radv_finishme("multisample");
+    }
+
+    if (device->instance->physicalDevice.rad_info.chip_class >= VI) {
+	unsigned max_uncompressed_block_size = 2;
+	if (iview->image->samples > 1) {
+	    //	if (rtex->surface.bpe == 1)
+	    //	    max_uncompressed_block_size = 0;
+	    //	else if (rtex->surface.bpe == 2)
+	    //	    max_uncompressed_block_size = 1;
+	}
+
+	cb->cb_dcc_control = S_028C78_MAX_UNCOMPRESSED_BLOCK_SIZE(max_uncompressed_block_size) |
+	    S_028C78_INDEPENDENT_64B_BLOCKS(1);
+    }
+
+#if 0//TODO
+    /* This must be set for fast clear to work without FMASK. */
+    if (!rtex->fmask.size && sctx->b.chip_class == SI) {
+	unsigned bankh = util_logbase2(rtex->surface.bankh);
+	surf->cb_color_attrib |= S_028C74_FMASK_BANK_HEIGHT(bankh);
+    }
+#endif
+
+    /* Determine pixel shader export format */
+    si_choose_spi_color_formats(cb, format, swap, ntype, false);
+}
+
+static void
+radv_initialise_ds_surface(struct radv_device *device,
+			   struct radv_framebuffer *framebuffer,
+			   int index,
+			   struct radv_image_view *iview)
+{
+    struct radv_ds_buffer_info *ds = &framebuffer->attachments[index].ds;
+    unsigned format;
+
+    memset(ds, 0, sizeof(*ds));
+    switch (iview->vk_format) {
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+	ds->pa_su_poly_offset_db_fmt_cntl = S_028B78_POLY_OFFSET_NEG_NUM_DB_BITS(-24);
+	break;
+    case VK_FORMAT_D16_UNORM:
+	ds->pa_su_poly_offset_db_fmt_cntl = S_028B78_POLY_OFFSET_NEG_NUM_DB_BITS(-16);
+	break;
+    case VK_FORMAT_D32_SFLOAT:
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+	ds->pa_su_poly_offset_db_fmt_cntl = S_028B78_POLY_OFFSET_NEG_NUM_DB_BITS(-23) |
+	    S_028B78_POLY_OFFSET_DB_IS_FLOAT_FMT(1);
+	break;
+    default:
+	break;
+    }
+
+    format = radv_translate_dbformat(iview->vk_format);
+    if (format == V_028040_Z_INVALID) {
+	fprintf(stderr, "Invalid DB format: %d, disabling DB.\n", iview->vk_format);
+    }
+
+    ds->db_depth_info = S_02803C_ADDR5_SWIZZLE_MASK(1);
+    ds->db_z_info = S_028040_FORMAT(format);
+    ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);
+}
 
 VkResult radv_CreateFramebuffer(
     VkDevice                                    _device,
@@ -1106,12 +1375,13 @@ VkResult radv_CreateFramebuffer(
     VkFramebuffer*                              pFramebuffer)
 {
    RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_render_pass, pass, pCreateInfo->renderPass);
    struct radv_framebuffer *framebuffer;
 
    assert(pCreateInfo->sType == VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO);
 
-      size_t size = sizeof(*framebuffer) +
-                 sizeof(struct radv_image_view *) * pCreateInfo->attachmentCount;
+   size_t size = sizeof(*framebuffer) +
+                 sizeof(struct radv_attachment_info) * pCreateInfo->attachmentCount;
    framebuffer = radv_alloc2(&device->alloc, pAllocator, size, 8,
                             VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (framebuffer == NULL)
@@ -1120,7 +1390,13 @@ VkResult radv_CreateFramebuffer(
    framebuffer->attachment_count = pCreateInfo->attachmentCount;
    for (uint32_t i = 0; i < pCreateInfo->attachmentCount; i++) {
       VkImageView _iview = pCreateInfo->pAttachments[i];
-      framebuffer->attachments[i] = radv_image_view_from_handle(_iview);
+      struct radv_image_view *iview = radv_image_view_from_handle(_iview);
+      framebuffer->attachments[i].attachment = iview;
+      if (iview->aspect_mask & VK_IMAGE_ASPECT_COLOR_BIT) {
+	  radv_initialise_color_surface(device, framebuffer, i, iview);
+      } else if (iview->aspect_mask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) {
+	  radv_initialise_ds_surface(device, framebuffer, i, iview);
+      }
    }
 
    framebuffer->width = pCreateInfo->width;

@@ -2,7 +2,7 @@
 
 #include "vk_format.h"
 #include "sid.h"
-
+#include "r600d_common.h"
 uint32_t radv_translate_buffer_dataformat(const struct vk_format_description *desc,
 					  int first_non_void)
 {
@@ -274,6 +274,201 @@ radv_physical_device_get_format_properties(struct radv_physical_device *physical
    out_properties->linearTilingFeatures = linear;
    out_properties->optimalTilingFeatures = tiled;
    out_properties->bufferFeatures = buffer;
+}
+
+uint32_t radv_translate_colorformat(VkFormat format)
+{
+	const struct vk_format_description *desc = vk_format_description(format);
+
+#define HAS_SIZE(x,y,z,w) \
+	(desc->channel[0].size == (x) && desc->channel[1].size == (y) && \
+         desc->channel[2].size == (z) && desc->channel[3].size == (w))
+
+	//	if (format == PIPE_FORMAT_R11G11B10_FLOAT) /* isn't plain */
+	//		return V_028C70_COLOR_10_11_11;
+
+	if (desc->layout != VK_FORMAT_LAYOUT_PLAIN)
+		return V_028C70_COLOR_INVALID;
+
+	/* hw cannot support mixed formats (except depth/stencil, since
+	 * stencil is not written to). */
+	if (desc->is_mixed && desc->colorspace != VK_FORMAT_COLORSPACE_ZS)
+		return V_028C70_COLOR_INVALID;
+
+	switch (desc->nr_channels) {
+	case 1:
+		switch (desc->channel[0].size) {
+		case 8:
+			return V_028C70_COLOR_8;
+		case 16:
+			return V_028C70_COLOR_16;
+		case 32:
+			return V_028C70_COLOR_32;
+		}
+		break;
+	case 2:
+		if (desc->channel[0].size == desc->channel[1].size) {
+			switch (desc->channel[0].size) {
+			case 8:
+				return V_028C70_COLOR_8_8;
+			case 16:
+				return V_028C70_COLOR_16_16;
+			case 32:
+				return V_028C70_COLOR_32_32;
+			}
+		} else if (HAS_SIZE(8,24,0,0)) {
+			return V_028C70_COLOR_24_8;
+		} else if (HAS_SIZE(24,8,0,0)) {
+			return V_028C70_COLOR_8_24;
+		}
+		break;
+	case 3:
+		if (HAS_SIZE(5,6,5,0)) {
+			return V_028C70_COLOR_5_6_5;
+		} else if (HAS_SIZE(32,8,24,0)) {
+			return V_028C70_COLOR_X24_8_32_FLOAT;
+		}
+		break;
+	case 4:
+		if (desc->channel[0].size == desc->channel[1].size &&
+		    desc->channel[0].size == desc->channel[2].size &&
+		    desc->channel[0].size == desc->channel[3].size) {
+			switch (desc->channel[0].size) {
+			case 4:
+				return V_028C70_COLOR_4_4_4_4;
+			case 8:
+				return V_028C70_COLOR_8_8_8_8;
+			case 16:
+				return V_028C70_COLOR_16_16_16_16;
+			case 32:
+				return V_028C70_COLOR_32_32_32_32;
+			}
+		} else if (HAS_SIZE(5,5,5,1)) {
+			return V_028C70_COLOR_1_5_5_5;
+		} else if (HAS_SIZE(10,10,10,2)) {
+			return V_028C70_COLOR_2_10_10_10;
+		}
+		break;
+	}
+	return V_028C70_COLOR_INVALID;
+}
+
+uint32_t radv_colorformat_endian_swap(uint32_t colorformat)
+{
+    if (0/*SI_BIG_ENDIAN*/) {
+		switch(colorformat) {
+		/* 8-bit buffers. */
+		case V_028C70_COLOR_8:
+			return V_028C70_ENDIAN_NONE;
+
+		/* 16-bit buffers. */
+		case V_028C70_COLOR_5_6_5:
+		case V_028C70_COLOR_1_5_5_5:
+		case V_028C70_COLOR_4_4_4_4:
+		case V_028C70_COLOR_16:
+		case V_028C70_COLOR_8_8:
+			return V_028C70_ENDIAN_8IN16;
+
+		/* 32-bit buffers. */
+		case V_028C70_COLOR_8_8_8_8:
+		case V_028C70_COLOR_2_10_10_10:
+		case V_028C70_COLOR_8_24:
+		case V_028C70_COLOR_24_8:
+		case V_028C70_COLOR_16_16:
+			return V_028C70_ENDIAN_8IN32;
+
+		/* 64-bit buffers. */
+		case V_028C70_COLOR_16_16_16_16:
+			return V_028C70_ENDIAN_8IN16;
+
+		case V_028C70_COLOR_32_32:
+			return V_028C70_ENDIAN_8IN32;
+
+		/* 128-bit buffers. */
+		case V_028C70_COLOR_32_32_32_32:
+			return V_028C70_ENDIAN_8IN32;
+		default:
+			return V_028C70_ENDIAN_NONE; /* Unsupported. */
+		}
+	} else {
+		return V_028C70_ENDIAN_NONE;
+	}
+}
+
+uint32_t radv_translate_dbformat(VkFormat format)
+{
+	switch (format) {
+	case VK_FORMAT_D16_UNORM:
+		return V_028040_Z_16;
+	case VK_FORMAT_X8_D24_UNORM_PACK32:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+		return V_028040_Z_24; /* deprecated on SI */
+	case VK_FORMAT_D32_SFLOAT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		return V_028040_Z_32_FLOAT;
+	default:
+		return V_028040_Z_INVALID;
+	}
+}
+
+unsigned radv_translate_colorswap(VkFormat format, bool do_endian_swap)
+{
+	const struct vk_format_description *desc = vk_format_description(format);
+
+#define HAS_SWIZZLE(chan,swz) (desc->swizzle[chan] == VK_SWIZZLE_##swz)
+
+	//	if (format == PIPE_FORMAT_R11G11B10_FLOAT) /* isn't plain */
+	//		return V_0280A0_SWAP_STD;
+
+	if (desc->layout != VK_FORMAT_LAYOUT_PLAIN)
+		return ~0U;
+
+	switch (desc->nr_channels) {
+	case 1:
+		if (HAS_SWIZZLE(0,X))
+			return V_0280A0_SWAP_STD; /* X___ */
+		else if (HAS_SWIZZLE(3,X))
+			return V_0280A0_SWAP_ALT_REV; /* ___X */
+		break;
+	case 2:
+		if ((HAS_SWIZZLE(0,X) && HAS_SWIZZLE(1,Y)) ||
+		    (HAS_SWIZZLE(0,X) && HAS_SWIZZLE(1,NONE)) ||
+		    (HAS_SWIZZLE(0,NONE) && HAS_SWIZZLE(1,Y)))
+			return V_0280A0_SWAP_STD; /* XY__ */
+		else if ((HAS_SWIZZLE(0,Y) && HAS_SWIZZLE(1,X)) ||
+			 (HAS_SWIZZLE(0,Y) && HAS_SWIZZLE(1,NONE)) ||
+		         (HAS_SWIZZLE(0,NONE) && HAS_SWIZZLE(1,X)))
+			/* YX__ */
+			return (do_endian_swap ? V_0280A0_SWAP_STD : V_0280A0_SWAP_STD_REV);
+		else if (HAS_SWIZZLE(0,X) && HAS_SWIZZLE(3,Y))
+			return V_0280A0_SWAP_ALT; /* X__Y */
+		else if (HAS_SWIZZLE(0,Y) && HAS_SWIZZLE(3,X))
+			return V_0280A0_SWAP_ALT_REV; /* Y__X */
+		break;
+	case 3:
+		if (HAS_SWIZZLE(0,X))
+			return (do_endian_swap ? V_0280A0_SWAP_STD_REV : V_0280A0_SWAP_STD);
+		else if (HAS_SWIZZLE(0,Z))
+			return V_0280A0_SWAP_STD_REV; /* ZYX */
+		break;
+	case 4:
+		/* check the middle channels, the 1st and 4th channel can be NONE */
+		if (HAS_SWIZZLE(1,Y) && HAS_SWIZZLE(2,Z)) {
+			return V_0280A0_SWAP_STD; /* XYZW */
+		} else if (HAS_SWIZZLE(1,Z) && HAS_SWIZZLE(2,Y)) {
+			return V_0280A0_SWAP_STD_REV; /* WZYX */
+		} else if (HAS_SWIZZLE(1,Y) && HAS_SWIZZLE(2,X)) {
+			return V_0280A0_SWAP_ALT; /* ZYXW */
+		} else if (HAS_SWIZZLE(1,Z) && HAS_SWIZZLE(2,W)) {
+			/* YZWX */
+			if (desc->is_array)
+				return V_0280A0_SWAP_ALT_REV;
+			else
+				return (do_endian_swap ? V_0280A0_SWAP_ALT : V_0280A0_SWAP_ALT_REV);
+		}
+		break;
+	}
+	return ~0U;
 }
 
 void radv_GetPhysicalDeviceFormatProperties(

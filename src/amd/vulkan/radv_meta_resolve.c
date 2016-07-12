@@ -839,8 +839,8 @@ radv_cmd_buffer_resolve_subpass(struct radv_cmd_buffer *cmd_buffer)
       if (dest_att == VK_ATTACHMENT_UNUSED)
          continue;
 
-      struct radv_image_view *src_iview = fb->attachments[src_att];
-      struct radv_image_view *dest_iview = fb->attachments[dest_att];
+      struct radv_image_view *src_iview = fb->attachments[src_att].attachment;
+      struct radv_image_view *dest_iview = fb->attachments[dest_att].attachment;
 
       struct radv_subpass resolve_subpass = {
          .color_count = 1,
