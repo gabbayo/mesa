@@ -471,8 +471,6 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 	  desc[2] = buffer->size - offset;
 	  //TODO CIK
 	  desc[3] = cmd_buffer->state.pipeline->va_rsrc_word3[i];
-
-	  i++;
       }
 
       va = device->ws->buffer_get_va(cmd_buffer->upload.upload_bo.bo);
