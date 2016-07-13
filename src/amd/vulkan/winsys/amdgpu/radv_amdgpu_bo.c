@@ -186,6 +186,55 @@ amdgpu_winsys_get_fd(struct radeon_winsys *_ws,
     return true;
 }
 
+static unsigned eg_tile_split_rev(unsigned eg_tile_split)
+{
+   switch (eg_tile_split) {
+   case 64:    return 0;
+   case 128:   return 1;
+   case 256:   return 2;
+   case 512:   return 3;
+   default:
+   case 1024:  return 4;
+   case 2048:  return 5;
+   case 4096:  return 6;
+   }
+}
+
+static void
+amdgpu_winsys_bo_set_metadata(struct radeon_winsys_bo *_bo,
+			      struct radeon_bo_metadata *md)
+{
+   struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
+   struct amdgpu_bo_metadata metadata = {0};
+   uint32_t tiling_flags = 0;
+
+   if (md->macrotile == RADEON_LAYOUT_TILED)
+      tiling_flags |= AMDGPU_TILING_SET(ARRAY_MODE, 4); /* 2D_TILED_THIN1 */
+   else if (md->microtile == RADEON_LAYOUT_TILED)
+      tiling_flags |= AMDGPU_TILING_SET(ARRAY_MODE, 2); /* 1D_TILED_THIN1 */
+   else
+      tiling_flags |= AMDGPU_TILING_SET(ARRAY_MODE, 1); /* LINEAR_ALIGNED */
+
+   tiling_flags |= AMDGPU_TILING_SET(PIPE_CONFIG, md->pipe_config);
+   tiling_flags |= AMDGPU_TILING_SET(BANK_WIDTH, util_logbase2(md->bankw));
+   tiling_flags |= AMDGPU_TILING_SET(BANK_HEIGHT, util_logbase2(md->bankh));
+   if (md->tile_split)
+      tiling_flags |= AMDGPU_TILING_SET(TILE_SPLIT, eg_tile_split_rev(md->tile_split));
+   tiling_flags |= AMDGPU_TILING_SET(MACRO_TILE_ASPECT, util_logbase2(md->mtilea));
+   tiling_flags |= AMDGPU_TILING_SET(NUM_BANKS, util_logbase2(md->num_banks)-1);
+
+   if (md->scanout)
+      tiling_flags |= AMDGPU_TILING_SET(MICRO_TILE_MODE, 0); /* DISPLAY_MICRO_TILING */
+   else
+      tiling_flags |= AMDGPU_TILING_SET(MICRO_TILE_MODE, 1); /* THIN_MICRO_TILING */
+
+   metadata.tiling_info = tiling_flags;
+   metadata.size_metadata = md->size_metadata;
+   memcpy(metadata.umd_metadata, md->metadata, sizeof(md->metadata));
+
+   amdgpu_bo_set_metadata(bo->bo, &metadata);
+}
+
 void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws)
 {
    ws->base.buffer_create = amdgpu_winsys_bo_create;
@@ -195,4 +244,5 @@ void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws)
    ws->base.buffer_unmap = amdgpu_winsys_bo_unmap;
    ws->base.buffer_from_fd = amdgpu_winsys_bo_from_fd;
    ws->base.buffer_get_fd = amdgpu_winsys_get_fd;
+   ws->base.buffer_set_metadata = amdgpu_winsys_bo_set_metadata;
 }

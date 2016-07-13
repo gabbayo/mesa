@@ -179,6 +179,38 @@ struct radeon_surf {
     uint64_t                    dcc_alignment;
 };
 
+enum radeon_bo_layout {
+    RADEON_LAYOUT_LINEAR = 0,
+    RADEON_LAYOUT_TILED,
+    RADEON_LAYOUT_SQUARETILED,
+
+    RADEON_LAYOUT_UNKNOWN
+};
+
+/* Tiling info for display code, DRI sharing, and other data. */
+struct radeon_bo_metadata {
+    /* Tiling flags describing the texture layout for display code
+     * and DRI sharing.
+     */
+    enum radeon_bo_layout   microtile;
+    enum radeon_bo_layout   macrotile;
+    unsigned                pipe_config;
+    unsigned                bankw;
+    unsigned                bankh;
+    unsigned                tile_split;
+    unsigned                mtilea;
+    unsigned                num_banks;
+    unsigned                stride;
+    bool                    scanout;
+
+    /* Additional metadata associated with the buffer, in bytes.
+     * The maximum size is 64 * 4. This is opaque for the winsys & kernel.
+     * Supported by amdgpu only.
+     */
+    uint32_t                size_metadata;
+    uint32_t                metadata[64];
+};
+
 struct radeon_winsys_bo;
 struct radeon_winsys_fence;
 
@@ -209,6 +241,8 @@ struct radeon_winsys {
 
    uint64_t (*buffer_get_va)(struct radeon_winsys_bo *bo);
 
+   void (*buffer_set_metadata)(struct radeon_winsys_bo *bo,
+			       struct radeon_bo_metadata *md);
    struct radeon_winsys_ctx *(*ctx_create)(struct radeon_winsys *ws);
    void (*ctx_destroy)(struct radeon_winsys_ctx *ctx);
 

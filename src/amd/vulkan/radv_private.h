@@ -1649,6 +1649,10 @@ radv_get_levelCount(const struct radv_image *image,
           image->levels - range->baseMipLevel : range->levelCount;
 }
 
+struct radeon_bo_metadata;
+void
+radv_init_metadata(struct radv_image *image,
+		   struct radeon_bo_metadata *metadata);
 struct radv_image_view {
    const struct radv_image *image; /**< VkImageViewCreateInfo::image */
    struct radv_bo *bo;

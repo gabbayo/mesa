@@ -1,5 +1,6 @@
 #include "radv_private.h"
 #include "vk_format.h"
+#include "radv_radeon_winsys.h"
 static unsigned
 radv_choose_tiling(struct radv_device *Device,
 		   const struct radv_image_create_info *create_info)
@@ -59,7 +60,27 @@ radv_init_surface(struct radv_device *device,
    surface->flags |= RADEON_SURF_HAS_TILE_MODE_INDEX;
    return 0;
 }
-		  
+
+void
+radv_init_metadata(struct radv_image *image,
+		   struct radeon_bo_metadata *metadata)
+{
+   struct radeon_surf *surface = &image->surface;
+
+   memset(metadata, 0, sizeof(*metadata));
+   metadata->microtile = surface->level[0].mode >= RADEON_SURF_MODE_1D ?
+      RADEON_LAYOUT_TILED : RADEON_LAYOUT_LINEAR;
+   metadata->macrotile = surface->level[0].mode >= RADEON_SURF_MODE_2D ?
+      RADEON_LAYOUT_TILED : RADEON_LAYOUT_LINEAR;
+   metadata->pipe_config = surface->pipe_config;
+   metadata->bankw = surface->bankw;
+   metadata->bankh = surface->bankh;
+   metadata->tile_split = surface->tile_split;
+   metadata->mtilea = surface->mtilea;
+   metadata->num_banks = surface->num_banks;
+   metadata->stride = surface->level[0].pitch_bytes;
+   metadata->scanout = (surface->flags & RADEON_SURF_SCANOUT) != 0;
+}
 
 VkResult
 radv_image_create(VkDevice _device,
