@@ -383,8 +383,6 @@ radv_query_opaque_metadata(struct radv_device *device,
    /* TILE_MODE_INDEX is ambiguous without a PCI ID. */
    md->metadata[1] = si_get_bo_metadata_word1(device);
 
-   /* Dwords [2:9] contain the image descriptor. */
-   memcpy(&md->metadata[2], desc, sizeof(desc));
 
    si_make_texture_descriptor(device, image, true,
 			      image->vk_format,
@@ -396,6 +394,15 @@ radv_query_opaque_metadata(struct radv_device *device,
 
    si_set_mutable_tex_desc_fields(device, image, &image->surface.level[0], 0, 0,
 				  image->surface.blk_w, false, desc);
+
+   /* Dwords [2:9] contain the image descriptor. */
+   memcpy(&md->metadata[2], desc, sizeof(desc));
+
+   /* Clear the base address and set the relative DCC offset. */
+   desc[0] = 0;
+   desc[1] &= C_008F14_BASE_ADDRESS_HI;
+   desc[7] = image->dcc_offset >> 8;
+
    /* Dwords [10:..] contain the mipmap level offsets. */
    for (i = 0; i <= image->levels - 1; i++)
       md->metadata[10+i] = image->surface.level[i].offset >> 8;
