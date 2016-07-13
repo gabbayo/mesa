@@ -482,6 +482,14 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
       radeon_emit(cmd_buffer->cs, va >> 32);
 
     }
+
+    radeon_set_context_reg_seq(cmd_buffer->cs, R_02843C_PA_CL_VPORT_XSCALE, 6);
+    radeon_emit(cmd_buffer->cs, fui(1.0));
+    radeon_emit(cmd_buffer->cs, fui(0.0));
+    radeon_emit(cmd_buffer->cs, fui(1.0));
+    radeon_emit(cmd_buffer->cs, fui(0.0));
+    radeon_emit(cmd_buffer->cs, fui(1.0));
+    radeon_emit(cmd_buffer->cs, fui(0.0));
     cmd_buffer->state.vertex_descriptors_dirty = false;
     cmd_buffer->state.vb_dirty = 0;
     if (cmd_buffer->state.dirty & RADV_CMD_DIRTY_PIPELINE)
