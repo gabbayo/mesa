@@ -382,6 +382,20 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
    };
 
 
+   RADV_CALL(CmdSetViewport)(cmd_buffer_h, 0, 1,
+			     (VkViewport[]) {
+			       {
+				 .x = 0,
+				   .y = 0,
+				   .width = fb->width,
+				   .height = fb->height,
+				   
+				   /* Ignored when clearing only stencil. */
+				   .minDepth = 0,
+				   .maxDepth = 0,
+				   },
+				 });
+
    RADV_CALL(CmdBindVertexBuffers)(cmd_buffer_h, 0, 1,
       (VkBuffer[]) { radv_buffer_to_handle(&vertex_buffer) },
       (VkDeviceSize[]) { 0 });

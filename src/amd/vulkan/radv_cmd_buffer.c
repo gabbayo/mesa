@@ -470,10 +470,6 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
       radeon_emit(cmd_buffer->cs, va);
       radeon_emit(cmd_buffer->cs, va >> 32);
 
-      radeon_set_sh_reg_seq(cmd_buffer->cs,
-			    R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
-      radeon_emit(cmd_buffer->cs, 0); /* base vertex */
-      radeon_emit(cmd_buffer->cs, 0);
     }
     cmd_buffer->state.vertex_descriptors_dirty = false;
     cmd_buffer->state.vb_dirty = 0;
@@ -493,6 +489,16 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
     radeon_emit(cmd_buffer->cs, cmd_buffer->state.pipeline->graphics.prim); /* VGT_PRIMITIVE_TYPE */
     radeon_emit(cmd_buffer->cs, ia_multi_vgt_param); /* IA_MULTI_VGT_PARAM */
     radeon_emit(cmd_buffer->cs, ls_hs_config); /* VGT_LS_HS_CONFIG */
+
+    radeon_set_sh_reg_seq(cmd_buffer->cs,
+			  R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
+    radeon_emit(cmd_buffer->cs, 0); /* base vertex */
+    radeon_emit(cmd_buffer->cs, 0);
+
+    radeon_set_sh_reg_seq(cmd_buffer->cs,
+			  R_00B030_SPI_SHADER_USER_DATA_PS_0 + 8 * 5, 2);
+    radeon_emit(cmd_buffer->cs, 0); /* prim mask */
+    radeon_emit(cmd_buffer->cs, 0);
 
     radv_cmd_buffer_flush_dynamic_state(cmd_buffer);
 }
