@@ -1,6 +1,7 @@
 #include "radv_private.h"
 #include "vk_format.h"
 #include "radv_radeon_winsys.h"
+#include "sid.h"
 static unsigned
 radv_choose_tiling(struct radv_device *Device,
 		   const struct radv_image_create_info *create_info)
@@ -60,9 +61,351 @@ radv_init_surface(struct radv_device *device,
    surface->flags |= RADEON_SURF_HAS_TILE_MODE_INDEX;
    return 0;
 }
+#define ATI_VENDOR_ID 0x1002
+static uint32_t si_get_bo_metadata_word1(struct radv_device *device)
+{
+	return (ATI_VENDOR_ID << 16) | device->instance->physicalDevice.rad_info.pci_id;
+}
+
+static inline unsigned
+si_tile_mode_index(const struct radv_image *image, unsigned level, bool stencil)
+{
+	if (stencil)
+		return image->surface.stencil_tiling_index[level];
+	else
+		return image->surface.tiling_index[level];
+}
+
+static void
+si_set_mutable_tex_desc_fields(struct radv_device *device,
+			       struct radv_image *image,
+			       const struct radeon_surf_level *base_level_info,
+			       unsigned base_level, unsigned first_level,
+			       unsigned block_width, bool is_stencil,
+			       uint32_t *state)
+{
+   uint64_t gpu_address = device->ws->buffer_get_va(image->bo->bo);
+   uint64_t va = gpu_address + base_level_info->offset;
+	unsigned pitch = base_level_info->nblk_x * block_width;
+
+	state[1] &= C_008F14_BASE_ADDRESS_HI;
+	state[3] &= C_008F1C_TILING_INDEX;
+	state[4] &= C_008F20_PITCH;
+	state[6] &= C_008F28_COMPRESSION_EN;
+
+	state[0] = va >> 8;
+	state[1] |= S_008F14_BASE_ADDRESS_HI(va >> 40);
+	state[3] |= S_008F1C_TILING_INDEX(si_tile_mode_index(image, base_level,
+							     is_stencil));
+	state[4] |= S_008F20_PITCH(pitch - 1);
+
+	if (image->dcc_offset && image->surface.level[first_level].dcc_enabled) {
+		state[6] |= S_008F28_COMPRESSION_EN(1);
+		state[7] = (gpu_address + 
+			    image->dcc_offset +
+			    base_level_info->dcc_offset) >> 8;
+	}
+}
+
+static unsigned radv_map_swizzle(unsigned swizzle)
+{
+	switch (swizzle) {
+	case VK_SWIZZLE_Y:
+		return V_008F0C_SQ_SEL_Y;
+	case VK_SWIZZLE_Z:
+		return V_008F0C_SQ_SEL_Z;
+	case VK_SWIZZLE_W:
+		return V_008F0C_SQ_SEL_W;
+	case VK_SWIZZLE_0:
+		return V_008F0C_SQ_SEL_0;
+	case VK_SWIZZLE_1:
+		return V_008F0C_SQ_SEL_1;
+	default: /* VK_SWIZZLE_X */
+		return V_008F0C_SQ_SEL_X;
+	}
+}
+
+static unsigned radv_tex_dim(unsigned res_target, unsigned view_target,
+			   unsigned nr_samples)
+{
+   return V_008F1C_SQ_RSRC_IMG_2D;
+}
+/**
+ * Build the sampler view descriptor for a texture.
+ */
+static void
+si_make_texture_descriptor(struct radv_device *device,
+			   struct radv_image *image,
+			   bool sampler,
+			   VkFormat vk_format,
+			   const unsigned char state_swizzle[4],
+			   unsigned first_level, unsigned last_level,
+			   unsigned first_layer, unsigned last_layer,
+			   unsigned width, unsigned height, unsigned depth,
+			   uint32_t *state,
+			   uint32_t *fmask_state)
+{
+	const struct vk_format_description *desc;
+	unsigned char swizzle[4];
+	int first_non_void;
+	unsigned num_format, data_format, type;
+	uint64_t va;
+	
+
+	desc = vk_format_description(vk_format);
+
+	if (desc->colorspace == VK_FORMAT_COLORSPACE_ZS) {
+		const unsigned char swizzle_xxxx[4] = {0, 0, 0, 0};
+		const unsigned char swizzle_yyyy[4] = {1, 1, 1, 1};
+
+		switch (vk_format) {
+		case VK_FORMAT_X8_D24_UNORM_PACK32:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:
+			vk_format_compose_swizzles(swizzle_yyyy, state_swizzle, swizzle);
+			break;
+		default:
+			vk_format_compose_swizzles(swizzle_xxxx, state_swizzle, swizzle);
+		}
+	} else {
+		vk_format_compose_swizzles(desc->swizzle, state_swizzle, swizzle);
+	}
+
+	first_non_void = vk_format_get_first_non_void_channel(vk_format);
+
+	switch (vk_format) {
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+		num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
+		break;
+	default:
+		if (first_non_void < 0) {
+			if (vk_format_is_compressed(vk_format)) {
+#if 0
+				switch (vk_format) {
+				case VK_FORMAT_DXT1_SRGB:
+				case VK_FORMAT_DXT1_SRGBA:
+				case VK_FORMAT_DXT3_SRGBA:
+				case VK_FORMAT_DXT5_SRGBA:
+				case VK_FORMAT_BPTC_SRGBA:
+				case VK_FORMAT_ETC2_SRGB8:
+				case VK_FORMAT_ETC2_SRGB8A1:
+				case VK_FORMAT_ETC2_SRGBA8:
+					num_format = V_008F14_IMG_NUM_FORMAT_SRGB;
+					break;
+				case VK_FORMAT_RGTC1_SNORM:
+				case VK_FORMAT_LATC1_SNORM:
+				case VK_FORMAT_RGTC2_SNORM:
+				case VK_FORMAT_LATC2_SNORM:
+				case VK_FORMAT_ETC2_R11_SNORM:
+				case VK_FORMAT_ETC2_RG11_SNORM:
+				/* implies float, so use SNORM/UNORM to determine
+				   whether data is signed or not */
+				case VK_FORMAT_BPTC_RGB_FLOAT:
+					num_format = V_008F14_IMG_NUM_FORMAT_SNORM;
+					break;
+				default:
+					num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
+					break;
+				}
+#endif
+			} else if (desc->layout == VK_FORMAT_LAYOUT_SUBSAMPLED) {
+				num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
+			} else {
+				num_format = V_008F14_IMG_NUM_FORMAT_FLOAT;
+			}
+		} else if (desc->colorspace == VK_FORMAT_COLORSPACE_SRGB) {
+			num_format = V_008F14_IMG_NUM_FORMAT_SRGB;
+		} else {
+			num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
+
+			switch (desc->channel[first_non_void].type) {
+			case VK_FORMAT_TYPE_FLOAT:
+				num_format = V_008F14_IMG_NUM_FORMAT_FLOAT;
+				break;
+			case VK_FORMAT_TYPE_SIGNED:
+				if (desc->channel[first_non_void].normalized)
+					num_format = V_008F14_IMG_NUM_FORMAT_SNORM;
+				else if (desc->channel[first_non_void].pure_integer)
+					num_format = V_008F14_IMG_NUM_FORMAT_SINT;
+				else
+					num_format = V_008F14_IMG_NUM_FORMAT_SSCALED;
+				break;
+			case VK_FORMAT_TYPE_UNSIGNED:
+				if (desc->channel[first_non_void].normalized)
+					num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
+				else if (desc->channel[first_non_void].pure_integer)
+					num_format = V_008F14_IMG_NUM_FORMAT_UINT;
+				else
+					num_format = V_008F14_IMG_NUM_FORMAT_USCALED;
+			}
+		}
+	}
+
+	data_format = radv_translate_texformat(vk_format, desc, first_non_void);
+	if (data_format == ~0) {
+		data_format = 0;
+	}
+
+#if 0
+	if (!sampler &&
+	    (res->target == PIPE_TEXTURE_CUBE ||
+	     res->target == PIPE_TEXTURE_CUBE_ARRAY ||
+	     res->target == PIPE_TEXTURE_3D)) {
+		/* For the purpose of shader images, treat cube maps and 3D
+		 * textures as 2D arrays. For 3D textures, the address
+		 * calculations for mipmaps are different, so we rely on the
+		 * caller to effectively disable mipmaps.
+		 */
+		type = V_008F1C_SQ_RSRC_IMG_2D_ARRAY;
+
+		assert(res->target != PIPE_TEXTURE_3D || (first_level == 0 && last_level == 0));
+	} else {
+		type = radv_tex_dim(res->target, target, res->nr_samples);
+	}
+#endif
+	type = radv_tex_dim(image->type, 0, image->samples);
+#if 0	
+	if (type == V_008F1C_SQ_RSRC_IMG_1D_ARRAY) {
+	        height = 1;
+		depth = image->array_size;
+	} else if (type == V_008F1C_SQ_RSRC_IMG_2D_ARRAY ||
+		   type == V_008F1C_SQ_RSRC_IMG_2D_MSAA_ARRAY) {
+		if (sampler || res->target != PIPE_TEXTURE_3D)
+			depth = image->array_size;
+	} else if (type == V_008F1C_SQ_RSRC_IMG_CUBE)
+		depth = res->array_size / 6;
+#endif
+	state[0] = 0;
+	state[1] = (S_008F14_DATA_FORMAT(data_format) |
+		    S_008F14_NUM_FORMAT(num_format));
+	state[2] = (S_008F18_WIDTH(width - 1) |
+		    S_008F18_HEIGHT(height - 1));
+	state[3] = (S_008F1C_DST_SEL_X(radv_map_swizzle(swizzle[0])) |
+		    S_008F1C_DST_SEL_Y(radv_map_swizzle(swizzle[1])) |
+		    S_008F1C_DST_SEL_Z(radv_map_swizzle(swizzle[2])) |
+		    S_008F1C_DST_SEL_W(radv_map_swizzle(swizzle[3])) |
+		    S_008F1C_BASE_LEVEL(image->samples > 1 ?
+					0 : first_level) |
+		    S_008F1C_LAST_LEVEL(image->samples > 1 ?
+					util_logbase2(image->samples) :
+					last_level) |
+		    S_008F1C_POW2_PAD(image->levels > 1) |
+		    S_008F1C_TYPE(type));
+	state[4] = S_008F20_DEPTH(depth - 1);
+	state[5] = (S_008F24_BASE_ARRAY(first_layer) |
+		    S_008F24_LAST_ARRAY(last_layer));
+	state[6] = 0;
+	state[7] = 0;
+
+	if (image->dcc_offset) {
+		unsigned swap = radv_translate_colorswap(vk_format, FALSE);
+
+		state[6] = S_008F28_ALPHA_IS_ON_MSB(swap <= 1);
+	} else {
+		/* The last dword is unused by hw. The shader uses it to clear
+		 * bits in the first dword of sampler state.
+		 */
+		if (device->instance->physicalDevice.rad_info.chip_class <= CIK && image->samples <= 1) {
+			if (first_level == last_level)
+				state[7] = C_008F30_MAX_ANISO_RATIO;
+			else
+				state[7] = 0xffffffff;
+		}
+	}
+#if 0
+	/* Initialize the sampler view for FMASK. */
+	if (tex->fmask.size) {
+		uint32_t fmask_format;
+
+		va = tex->resource.gpu_address + tex->fmask.offset;
+
+		switch (res->nr_samples) {
+		case 2:
+			fmask_format = V_008F14_IMG_DATA_FORMAT_FMASK8_S2_F2;
+			break;
+		case 4:
+			fmask_format = V_008F14_IMG_DATA_FORMAT_FMASK8_S4_F4;
+			break;
+		case 8:
+			fmask_format = V_008F14_IMG_DATA_FORMAT_FMASK32_S8_F8;
+			break;
+		default:
+			assert(0);
+			fmask_format = V_008F14_IMG_DATA_FORMAT_INVALID;
+		}
+
+		fmask_state[0] = va >> 8;
+		fmask_state[1] = S_008F14_BASE_ADDRESS_HI(va >> 40) |
+				 S_008F14_DATA_FORMAT(fmask_format) |
+				 S_008F14_NUM_FORMAT(V_008F14_IMG_NUM_FORMAT_UINT);
+		fmask_state[2] = S_008F18_WIDTH(width - 1) |
+				 S_008F18_HEIGHT(height - 1);
+		fmask_state[3] = S_008F1C_DST_SEL_X(V_008F1C_SQ_SEL_X) |
+				 S_008F1C_DST_SEL_Y(V_008F1C_SQ_SEL_X) |
+				 S_008F1C_DST_SEL_Z(V_008F1C_SQ_SEL_X) |
+				 S_008F1C_DST_SEL_W(V_008F1C_SQ_SEL_X) |
+				 S_008F1C_TILING_INDEX(tex->fmask.tile_mode_index) |
+				 S_008F1C_TYPE(radv_tex_dim(image->type, 0, 0));
+		fmask_state[4] = S_008F20_DEPTH(depth - 1) |
+				 S_008F20_PITCH(tex->fmask.pitch_in_pixels - 1);
+		fmask_state[5] = S_008F24_BASE_ARRAY(first_layer) |
+				 S_008F24_LAST_ARRAY(last_layer);
+		fmask_state[6] = 0;
+		fmask_state[7] = 0;
+	}
+#endif
+}
+
+static void
+radv_query_opaque_metadata(struct radv_device *device,
+			   struct radv_image *image,
+			   struct radeon_bo_metadata *md)
+{
+   static const unsigned char swizzle[] = {
+      VK_SWIZZLE_X,
+      VK_SWIZZLE_Y,
+      VK_SWIZZLE_Z,
+      VK_SWIZZLE_W
+   };
+   uint32_t desc[8], i;
+
+   /* Metadata image format format version 1:
+    * [0] = 1 (metadata format identifier)
+    * [1] = (VENDOR_ID << 16) | PCI_ID
+    * [2:9] = image descriptor for the whole resource
+    *         [2] is always 0, because the base address is cleared
+    *         [9] is the DCC offset bits [39:8] from the beginning of
+    *             the buffer
+    * [10:10+LAST_LEVEL] = mipmap level offset bits [39:8] for each level
+    */
+   md->metadata[0] = 1; /* metadata image format version 1 */
+
+   /* TILE_MODE_INDEX is ambiguous without a PCI ID. */
+   md->metadata[1] = si_get_bo_metadata_word1(device);
+
+   /* Dwords [2:9] contain the image descriptor. */
+   memcpy(&md->metadata[2], desc, sizeof(desc));
+
+   si_make_texture_descriptor(device, image, true,
+			      image->vk_format,
+			      swizzle, 0, image->levels - 1, 0,
+			      0, //is_array ? image->array_size - 1 : 0,
+			      image->extent.width, image->extent.height,
+			      image->extent.depth,
+			      desc, NULL);
+
+   si_set_mutable_tex_desc_fields(device, image, &image->surface.level[0], 0, 0,
+				  image->surface.blk_w, false, desc);
+   /* Dwords [10:..] contain the mipmap level offsets. */
+   for (i = 0; i <= image->levels - 1; i++)
+      md->metadata[10+i] = image->surface.level[i].offset >> 8;
+
+   md->size_metadata = (11 + image->levels - 1) * 4;
+}
 
 void
-radv_init_metadata(struct radv_image *image,
+radv_init_metadata(struct radv_device *device,
+		   struct radv_image *image,
 		   struct radeon_bo_metadata *metadata)
 {
    struct radeon_surf *surface = &image->surface;
@@ -80,6 +423,8 @@ radv_init_metadata(struct radv_image *image,
    metadata->num_banks = surface->num_banks;
    metadata->stride = surface->level[0].pitch_bytes;
    metadata->scanout = (surface->flags & RADEON_SURF_SCANOUT) != 0;
+
+   radv_query_opaque_metadata(device, image, metadata);
 }
 
 VkResult

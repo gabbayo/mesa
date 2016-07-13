@@ -642,6 +642,11 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
    if (bret == false)
      goto fail_alloc_memory;
 
+   {
+     struct radeon_bo_metadata metadata;
+     radv_init_metadata(device, image->image, &metadata);
+     device->ws->buffer_set_metadata(image->memory->bo.bo, &metadata);
+   }
    surface = &image->image->surface;
    uint32_t bpp = 32;
    uint32_t depth = 24;

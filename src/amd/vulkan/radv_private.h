@@ -1544,6 +1544,9 @@ uint32_t radv_translate_colorformat(VkFormat format);
 uint32_t radv_colorformat_endian_swap(uint32_t colorformat);
 unsigned radv_translate_colorswap(VkFormat format, bool do_endian_swap);
 uint32_t radv_translate_dbformat(VkFormat format);
+uint32_t radv_translate_texformat(VkFormat format,
+				  const struct vk_format_description *desc,
+				  int first_non_void);
 #if 0
 struct anv_format_swizzle {
    enum isl_channel_select r:4;
@@ -1607,7 +1610,7 @@ struct radv_image {
    /* Set when bound */
    struct radv_bo *bo;
    VkDeviceSize offset;
-
+  uint32_t dcc_offset;
    /**
     * Image subsurfaces
     *
@@ -1651,8 +1654,10 @@ radv_get_levelCount(const struct radv_image *image,
 
 struct radeon_bo_metadata;
 void
-radv_init_metadata(struct radv_image *image,
+radv_init_metadata(struct radv_device *device,
+		   struct radv_image *image,
 		   struct radeon_bo_metadata *metadata);
+
 struct radv_image_view {
    const struct radv_image *image; /**< VkImageViewCreateInfo::image */
    struct radv_bo *bo;

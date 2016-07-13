@@ -229,6 +229,41 @@ vk_format_aspects(VkFormat format)
       return VK_IMAGE_ASPECT_COLOR_BIT;
    }
 }
+
+static inline void vk_format_compose_swizzles(const unsigned char swz1[4],
+					      const unsigned char swz2[4],
+					      unsigned char dst[4])
+{
+   unsigned i;
+
+   for (i = 0; i < 4; i++) {
+      dst[i] = swz2[i] <= VK_SWIZZLE_W ?
+               swz1[swz2[i]] : swz2[i];
+   }
+}
+
+static inline bool
+vk_format_is_compressed(VkFormat format)
+{
+   const struct vk_format_description *desc = vk_format_description(format);
+
+   assert(desc);
+   if (!desc) {
+     return false;
+   }
+
+   switch (desc->layout) {
+   case VK_FORMAT_LAYOUT_S3TC:
+   case VK_FORMAT_LAYOUT_RGTC:
+   case VK_FORMAT_LAYOUT_ETC:
+   case VK_FORMAT_LAYOUT_BPTC:
+   case VK_FORMAT_LAYOUT_ASTC:
+      /* XXX add other formats in the future */
+      return true;
+   default:
+      return false;
+   }
+}
 #ifdef __cplusplus
 } // extern "C" {
 #endif

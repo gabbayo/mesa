@@ -106,10 +106,9 @@ uint32_t radv_translate_buffer_numformat(const struct vk_format_description *des
 	}
 }
 
-static uint32_t radv_translate_texformat(struct radv_physical_device *physical_device,
-					 VkFormat format,
-					 const struct vk_format_description *desc,
-					 int first_non_void)
+uint32_t radv_translate_texformat(VkFormat format,
+				  const struct vk_format_description *desc,
+				  int first_non_void)
 {
    bool uniform = true;
    int i;
@@ -254,7 +253,7 @@ static bool radv_is_sampler_format_supported(struct radv_physical_device *physic
    const struct vk_format_description *desc = vk_format_description(format);
    if (!desc || format == VK_FORMAT_UNDEFINED)
       return false;
-   return radv_translate_texformat(physical_device, format, vk_format_description(format),
+   return radv_translate_texformat(format, vk_format_description(format),
 				   vk_format_get_first_non_void_channel(format)) != ~0U;
 }
 
