@@ -464,7 +464,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 	  device->ws->cs_add_buffer(cmd_buffer->cs, buffer->bo->bo, 8);
 	  va = device->ws->buffer_get_va(buffer->bo->bo);
 
-	  va += buffer->offset;
+	  va += buffer->offset + cmd_buffer->state.pipeline->va_offset[i];
 	  desc[0] = va;
 	  desc[1] = S_008F04_BASE_ADDRESS_HI(va >> 32) | S_008F04_STRIDE(stride);
 	  desc[2] = buffer->size;

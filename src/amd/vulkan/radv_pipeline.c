@@ -642,6 +642,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 	   S_008F0C_NUM_FORMAT(num_format) |
 	   S_008F0C_DATA_FORMAT(data_format);
 
+       pipeline->va_offset[i] = desc->offset;
        pipeline->va_binding[i] = desc->binding;
    }
    pipeline->num_vertex_attribs = vi_info->vertexAttributeDescriptionCount;
