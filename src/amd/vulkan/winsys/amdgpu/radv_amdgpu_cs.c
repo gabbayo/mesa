@@ -116,6 +116,15 @@ amdgpu_cs_create(struct radeon_winsys *ws,
   return &cs->base;
 }
 
+static void amdgpu_cs_reset(struct radeon_winsys_cs *_cs)
+{
+   struct amdgpu_cs *cs = amdgpu_cs(_cs);
+   cs->base.cdw = 0;
+   cs->num_buffers = 0;
+
+   cs->ws->base.cs_add_buffer(&cs->base, cs->ib_buffer, 8);
+}
+
 static void amdgpu_cs_add_buffer(struct radeon_winsys_cs *_cs,
 				 struct radeon_winsys_bo *_bo,
 				 uint8_t priority)
@@ -230,6 +239,7 @@ void radv_amdgpu_cs_init_functions(struct amdgpu_winsys *ws)
    ws->base.ctx_destroy = amdgpu_ctx_destroy;
    ws->base.cs_create = amdgpu_cs_create;
    ws->base.cs_destroy = amdgpu_cs_destroy;
+   ws->base.cs_reset = amdgpu_cs_reset;
    ws->base.cs_add_buffer = amdgpu_cs_add_buffer;
    ws->base.cs_submit = amdgpu_winsys_cs_submit;
    ws->base.create_fence = amdgpu_create_fence;

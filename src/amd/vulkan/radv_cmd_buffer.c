@@ -631,8 +631,9 @@ VkResult radv_ResetCommandBuffer(
     VkCommandBuffer                             commandBuffer,
     VkCommandBufferResetFlags                   flags)
 {
-  //   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
-   return VK_SUCCESS;//radv_cmd_buffer_reset(cmd_buffer);
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+   cmd_buffer->device->ws->cs_reset(cmd_buffer->cs);
+   return VK_SUCCESS;
 }
 
 VkResult radv_BeginCommandBuffer(
@@ -640,6 +641,7 @@ VkResult radv_BeginCommandBuffer(
     const VkCommandBufferBeginInfo*             pBeginInfo)
 {
    RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+   cmd_buffer->device->ws->cs_reset(cmd_buffer->cs);
 
    /* setup initial configuration into command buffer */
    si_init_config(&cmd_buffer->device->instance->physicalDevice, cmd_buffer);
