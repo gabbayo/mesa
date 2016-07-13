@@ -222,7 +222,7 @@ struct radv_shader_variant *radv_shader_variant_create(struct radv_device *devic
        S_00B12C_SCRATCH_EN(scratch_enabled);
      break;
    case MESA_SHADER_FRAGMENT:
-     variant->rsrc2 = S_00B12C_USER_SGPR(8) |
+     variant->rsrc2 = S_00B12C_USER_SGPR(10) |
        S_00B12C_SCRATCH_EN(scratch_enabled);
      break;
    case MESA_SHADER_COMPUTE:
