@@ -1143,7 +1143,7 @@ handle_fs_outputs_post(struct nir_to_llvm_context *ctx,
 		for (j = 0; j < 4; j++)
 			color[j] = LLVMBuildLoad(ctx->builder,
 						 ctx->outputs[index][j], "");
-		si_export_mrt_color(ctx, color, index, index == ctx->num_outputs);
+		si_export_mrt_color(ctx, color, index, (index == ctx->num_outputs - 1));
 		index++;
 	}
 }
