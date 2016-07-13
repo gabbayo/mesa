@@ -207,8 +207,6 @@ radv_emit_graphics_raster_state(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_028A48_PA_SC_MODE_CNTL_0,
 			   raster->pa_sc_mode_cntl_0);
 
-    radeon_set_context_reg(cmd_buffer->cs, R_028BDC_PA_SC_LINE_CNTL, 0);
-    radeon_set_context_reg(cmd_buffer->cs, R_028BE0_PA_SC_AA_CONFIG, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_028BE4_PA_SU_VTX_CNTL,
 			   raster->pa_su_vtx_cntl);
 
@@ -217,6 +215,19 @@ radv_emit_graphics_raster_state(struct radv_cmd_buffer *cmd_buffer,
     radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_front_offset);
     radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_back_scale);
     radeon_emit(cmd_buffer->cs, raster->pa_su_poly_offset_back_offset);
+
+    radeon_set_context_reg_seq(cmd_buffer->cs, CM_R_028BDC_PA_SC_LINE_CNTL, 2);
+    radeon_emit(cmd_buffer->cs, S_028BDC_LAST_PIXEL(1));
+    radeon_emit(cmd_buffer->cs, 0);
+
+    radeon_set_context_reg(cmd_buffer->cs, CM_R_028804_DB_EQAA,
+			   S_028804_HIGH_QUALITY_INTERSECTIONS(1) |
+			   S_028804_STATIC_ANCHOR_ASSOCIATIONS(1));
+    radeon_set_context_reg(cmd_buffer->cs, EG_R_028A4C_PA_SC_MODE_CNTL_1,
+			   EG_S_028A4C_FORCE_EOV_CNTDWN_ENABLE(1) |
+			   EG_S_028A4C_FORCE_EOV_REZ_ENABLE(1));
+    radeon_set_context_reg(cmd_buffer->cs, R_028C38_PA_SC_AA_MASK_X0Y0_X1Y0, 0xffffffff);
+    radeon_set_context_reg(cmd_buffer->cs, R_028C3C_PA_SC_AA_MASK_X0Y1_X1Y1, 0xffffffff);
 }
 
 static void
@@ -495,6 +506,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
     radeon_emit(cmd_buffer->cs, 0); /* prim mask */
     radeon_emit(cmd_buffer->cs, 0);
 
+    radeon_set_context_reg(cmd_buffer->cs, R_028A6C_VGT_GS_OUT_PRIM_TYPE, 2);
     radv_cmd_buffer_flush_dynamic_state(cmd_buffer);
 }
 

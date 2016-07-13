@@ -395,6 +395,15 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
 				   .maxDepth = 0,
 				   },
 				 });
+   RADV_CALL(CmdSetScissor)(cmd_buffer_h, 0, 1,
+			     (VkRect2D[]) {
+			       {
+				 .offset.x = 0,
+				 .offset.y = 0,
+				 .extent.width = fb->width,
+				 .extent.height = fb->height,
+				   }
+				 });
 
    RADV_CALL(CmdBindVertexBuffers)(cmd_buffer_h, 0, 1,
       (VkBuffer[]) { radv_buffer_to_handle(&vertex_buffer) },

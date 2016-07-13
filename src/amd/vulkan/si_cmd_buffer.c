@@ -327,6 +327,12 @@ void si_init_config(struct radv_physical_device *physical_device,
    /* PA_SU_HARDWARE_SCREEN_OFFSET must be 0 due to hw bug on SI */
    radeon_set_context_reg(cs, R_028234_PA_SU_HARDWARE_SCREEN_OFFSET, 0);
    radeon_set_context_reg(cs, R_028820_PA_CL_NANINF_CNTL, 0);
+
+   radeon_set_context_reg(cs, R_028BE8_PA_CL_GB_VERT_CLIP_ADJ, fui(1.0));
+   radeon_set_context_reg(cs, R_028BEC_PA_CL_GB_VERT_DISC_ADJ, fui(1.0));
+   radeon_set_context_reg(cs, R_028BF0_PA_CL_GB_HORZ_CLIP_ADJ, fui(1.0));
+   radeon_set_context_reg(cs, R_028BF4_PA_CL_GB_HORZ_DISC_ADJ, fui(1.0));
+
    radeon_set_context_reg(cs, R_028AC0_DB_SRESULTS_COMPARE_STATE0, 0x0);
    radeon_set_context_reg(cs, R_028AC4_DB_SRESULTS_COMPARE_STATE1, 0x0);
    radeon_set_context_reg(cs, R_028AC8_DB_PRELOAD_CONTROL, 0x0);

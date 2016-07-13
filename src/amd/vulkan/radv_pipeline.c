@@ -462,6 +462,108 @@ static unsigned si_map_swizzle(unsigned swizzle)
 	}
 }
 
+static void
+radv_pipeline_init_dynamic_state(struct radv_pipeline *pipeline,
+				 const VkGraphicsPipelineCreateInfo *pCreateInfo)
+{
+   radv_cmd_dirty_mask_t states = RADV_CMD_DIRTY_DYNAMIC_ALL;
+   RADV_FROM_HANDLE(radv_render_pass, pass, pCreateInfo->renderPass);
+   struct radv_subpass *subpass = &pass->subpasses[pCreateInfo->subpass];
+
+   pipeline->dynamic_state = default_dynamic_state;
+
+   if (pCreateInfo->pDynamicState) {
+      /* Remove all of the states that are marked as dynamic */
+      uint32_t count = pCreateInfo->pDynamicState->dynamicStateCount;
+      for (uint32_t s = 0; s < count; s++)
+         states &= ~(1 << pCreateInfo->pDynamicState->pDynamicStates[s]);
+   }
+
+   struct radv_dynamic_state *dynamic = &pipeline->dynamic_state;
+
+   dynamic->viewport.count = pCreateInfo->pViewportState->viewportCount;
+   if (states & (1 << VK_DYNAMIC_STATE_VIEWPORT)) {
+      typed_memcpy(dynamic->viewport.viewports,
+                   pCreateInfo->pViewportState->pViewports,
+                   pCreateInfo->pViewportState->viewportCount);
+   }
+
+   dynamic->scissor.count = pCreateInfo->pViewportState->scissorCount;
+   if (states & (1 << VK_DYNAMIC_STATE_SCISSOR)) {
+      typed_memcpy(dynamic->scissor.scissors,
+                   pCreateInfo->pViewportState->pScissors,
+                   pCreateInfo->pViewportState->scissorCount);
+   }
+
+   if (states & (1 << VK_DYNAMIC_STATE_LINE_WIDTH)) {
+      assert(pCreateInfo->pRasterizationState);
+      dynamic->line_width = pCreateInfo->pRasterizationState->lineWidth;
+   }
+
+   if (states & (1 << VK_DYNAMIC_STATE_DEPTH_BIAS)) {
+      assert(pCreateInfo->pRasterizationState);
+      dynamic->depth_bias.bias =
+         pCreateInfo->pRasterizationState->depthBiasConstantFactor;
+      dynamic->depth_bias.clamp =
+         pCreateInfo->pRasterizationState->depthBiasClamp;
+      dynamic->depth_bias.slope =
+         pCreateInfo->pRasterizationState->depthBiasSlopeFactor;
+   }
+
+   if (states & (1 << VK_DYNAMIC_STATE_BLEND_CONSTANTS)) {
+      assert(pCreateInfo->pColorBlendState);
+      typed_memcpy(dynamic->blend_constants,
+                   pCreateInfo->pColorBlendState->blendConstants, 4);
+   }
+
+   /* If there is no depthstencil attachment, then don't read
+    * pDepthStencilState. The Vulkan spec states that pDepthStencilState may
+    * be NULL in this case. Even if pDepthStencilState is non-NULL, there is
+    * no need to override the depthstencil defaults in
+    * radv_pipeline::dynamic_state when there is no depthstencil attachment.
+    *
+    * From the Vulkan spec (20 Oct 2015, git-aa308cb):
+    *
+    *    pDepthStencilState [...] may only be NULL if renderPass and subpass
+    *    specify a subpass that has no depth/stencil attachment.
+    */
+   if (subpass->depth_stencil_attachment != VK_ATTACHMENT_UNUSED) {
+      if (states & (1 << VK_DYNAMIC_STATE_DEPTH_BOUNDS)) {
+         assert(pCreateInfo->pDepthStencilState);
+         dynamic->depth_bounds.min =
+            pCreateInfo->pDepthStencilState->minDepthBounds;
+         dynamic->depth_bounds.max =
+            pCreateInfo->pDepthStencilState->maxDepthBounds;
+      }
+
+      if (states & (1 << VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK)) {
+         assert(pCreateInfo->pDepthStencilState);
+         dynamic->stencil_compare_mask.front =
+            pCreateInfo->pDepthStencilState->front.compareMask;
+         dynamic->stencil_compare_mask.back =
+            pCreateInfo->pDepthStencilState->back.compareMask;
+      }
+
+      if (states & (1 << VK_DYNAMIC_STATE_STENCIL_WRITE_MASK)) {
+         assert(pCreateInfo->pDepthStencilState);
+         dynamic->stencil_write_mask.front =
+            pCreateInfo->pDepthStencilState->front.writeMask;
+         dynamic->stencil_write_mask.back =
+            pCreateInfo->pDepthStencilState->back.writeMask;
+      }
+
+      if (states & (1 << VK_DYNAMIC_STATE_STENCIL_REFERENCE)) {
+         assert(pCreateInfo->pDepthStencilState);
+         dynamic->stencil_reference.front =
+            pCreateInfo->pDepthStencilState->front.reference;
+         dynamic->stencil_reference.back =
+            pCreateInfo->pDepthStencilState->back.reference;
+      }
+   }
+
+   pipeline->dynamic_state_mask = states;
+}
+
 VkResult
 radv_pipeline_init(struct radv_pipeline *pipeline,
                   struct radv_device *device,
@@ -477,6 +579,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 
    pipeline->device = device;
 
+   radv_pipeline_init_dynamic_state(pipeline, pCreateInfo);
    const VkPipelineShaderStageCreateInfo *pStages[MESA_SHADER_STAGES] = { 0, };
    struct radv_shader_module *modules[MESA_SHADER_STAGES] = { 0, };
    for (uint32_t i = 0; i < pCreateInfo->stageCount; i++) {
