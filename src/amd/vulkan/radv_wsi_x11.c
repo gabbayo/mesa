@@ -588,8 +588,10 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
 {
    xcb_void_cookie_t cookie;
    VkResult result = VK_SUCCESS;
-
+   int fd;
    VkImage image_h;
+   bool bret;
+   struct radeon_surf *surface;
    result = radv_image_create(radv_device_to_handle(device),
       &(struct radv_image_create_info) {
          .vk_info =
@@ -634,26 +636,13 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
    //   image->memory->bo.is_winsys_bo = true;
 
    radv_BindImageMemory(VK_NULL_HANDLE, image_h, memory_h, 0);
-#if 0
-   struct radv_surface *surface = &image->image->color_surface;
-   assert(surface->isl.tiling == ISL_TILING_X);
 
-   int ret = radv_gem_set_tiling(device, image->memory->bo.gem_handle,
-                                surface->isl.row_pitch, I915_TILING_X);
-   if (ret) {
-      /* FINISHME: Choose a better error. */
-      result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
-                         "set_tiling failed: %m");
-      goto fail_alloc_memory;
-   }
+   bret = device->ws->buffer_get_fd(device->ws,
+				    image->memory->bo.bo, &fd);
+   if (bret == false)
+     goto fail_alloc_memory;
 
-   int fd = radv_gem_handle_to_fd(device, image->memory->bo.gem_handle);
-   if (fd == -1) {
-      /* FINISHME: Choose a better error. */
-      result = vk_errorf(VK_ERROR_OUT_OF_DEVICE_MEMORY,
-                         "handle_to_fd failed: %m");
-      goto fail_alloc_memory;
-   }
+   surface = &image->image->surface;
    uint32_t bpp = 32;
    uint32_t depth = 24;
    image->pixmap = xcb_generate_id(chain->conn);
@@ -665,10 +654,9 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
                                           image->image->size,
                                           pCreateInfo->imageExtent.width,
                                           pCreateInfo->imageExtent.height,
-                                          surface->isl.row_pitch,
+                                          surface->level[0].pitch_bytes,
                                           depth, bpp, fd);
    xcb_discard_reply(chain->conn, cookie.sequence);
-#endif
 
    int fence_fd = xshmfence_alloc_shm();
    if (fence_fd < 0)
@@ -714,7 +702,7 @@ x11_image_finish(struct x11_swapchain *chain,
                  struct x11_image *image)
 {
    xcb_void_cookie_t cookie;
-#if 0
+
    cookie = xcb_sync_destroy_fence(chain->conn, image->sync_fence);
    xcb_discard_reply(chain->conn, cookie.sequence);
    xshmfence_unmap_shm(image->shm_fence);
@@ -727,7 +715,7 @@ x11_image_finish(struct x11_swapchain *chain,
 
    radv_FreeMemory(radv_device_to_handle(chain->base.device),
                   radv_device_memory_to_handle(image->memory), pAllocator);
-#endif
+
 }
 
 static VkResult
