@@ -7,6 +7,7 @@ struct amdgpu_winsys_bo {
    uint64_t va;
    enum radeon_bo_domain initial_domain;
    uint64_t size;
+   bool is_shared;
 };
 
 static inline

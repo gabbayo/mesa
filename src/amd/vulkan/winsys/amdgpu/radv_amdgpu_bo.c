@@ -72,6 +72,7 @@ amdgpu_winsys_bo_create(struct radeon_winsys *_ws,
    bo->va_handle = va_handle;
    bo->initial_domain = initial_domain;
    bo->size = size;
+   bo->is_shared = false;
    return (struct radeon_winsys_bo *)bo;
 error_va_map:   
    amdgpu_va_range_free(va_handle);
@@ -109,6 +110,82 @@ amdgpu_winsys_bo_unmap(struct radeon_winsys_bo *_bo)
    amdgpu_bo_cpu_unmap(bo->bo);
 }
 
+static struct radeon_winsys_bo *
+amdgpu_winsys_bo_from_fd(struct radeon_winsys *_ws,
+			 int fd, unsigned *stride,
+			 unsigned *offset)
+{
+    struct amdgpu_winsys *ws = amdgpu_winsys(_ws);
+    struct amdgpu_winsys_bo *bo;
+    uint64_t va;
+    amdgpu_va_handle va_handle;
+    enum amdgpu_bo_handle_type type = amdgpu_bo_handle_type_dma_buf_fd;
+    struct amdgpu_bo_import_result result = {0};
+    struct amdgpu_bo_info info = {0};
+    enum radeon_bo_domain initial = 0;
+    int r;
+    bo = CALLOC_STRUCT(amdgpu_winsys_bo);
+    if (!bo)
+	return NULL;
+
+    r = amdgpu_bo_import(ws->dev, type, fd, &result);
+    if (r)
+	goto error;
+
+    r = amdgpu_bo_query_info(result.buf_handle, &info);
+    if (r)
+	goto error_query;
+
+    r = amdgpu_va_range_alloc(ws->dev, amdgpu_gpu_va_range_general,
+			      result.alloc_size, 1 << 20, 0, &va, &va_handle, 0);
+    if (r)
+	goto error_query;
+
+    r = amdgpu_bo_va_op(result.buf_handle, 0, result.alloc_size, va, 0, AMDGPU_VA_OP_MAP);
+    if (r)
+	goto error_va_map;
+
+    if (info.preferred_heap & AMDGPU_GEM_DOMAIN_VRAM)
+      initial |= RADEON_DOMAIN_VRAM;
+   if (info.preferred_heap & AMDGPU_GEM_DOMAIN_GTT)
+      initial |= RADEON_DOMAIN_GTT;
+
+   bo->bo = result.buf_handle;
+   bo->va = va;
+   bo->va_handle = va_handle;
+   bo->initial_domain = initial;
+   bo->size = result.alloc_size;
+   bo->is_shared = true;
+   return (struct radeon_winsys_bo *)bo;
+ error_va_map:
+   amdgpu_va_range_free(va_handle);
+
+error_query:
+   amdgpu_bo_free(result.buf_handle);
+
+error:
+   FREE(bo);
+   return NULL;
+}
+
+static bool
+amdgpu_winsys_get_fd(struct radeon_winsys *_ws,
+		     struct radeon_winsys_bo *_bo,
+		     int *fd)
+{
+    struct amdgpu_winsys_bo *bo = amdgpu_winsys_bo(_bo);
+    enum amdgpu_bo_handle_type type = amdgpu_bo_handle_type_dma_buf_fd;
+    int r;
+    unsigned handle;
+    r = amdgpu_bo_export(bo->bo, type, &handle);
+    if (r)
+	return false;
+
+    *fd = (int)handle;
+    bo->is_shared = true;
+    return true;
+}
+
 void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws)
 {
    ws->base.buffer_create = amdgpu_winsys_bo_create;
@@ -116,4 +193,6 @@ void radv_amdgpu_bo_init_functions(struct amdgpu_winsys *ws)
    ws->base.buffer_get_va = amdgpu_winsys_bo_get_va;
    ws->base.buffer_map = amdgpu_winsys_bo_map;
    ws->base.buffer_unmap = amdgpu_winsys_bo_unmap;
+   ws->base.buffer_from_fd = amdgpu_winsys_bo_from_fd;
+   ws->base.buffer_get_fd = amdgpu_winsys_get_fd;
 }

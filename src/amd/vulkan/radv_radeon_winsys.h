@@ -197,6 +197,13 @@ struct radeon_winsys {
    void (*buffer_destroy)(struct radeon_winsys_bo *bo);
    void *(*buffer_map)(struct radeon_winsys_bo *bo);
 
+   struct radeon_winsys_bo *(*buffer_from_fd)(struct radeon_winsys *ws,
+					      int fd,
+					      unsigned *stride, unsigned *offset);
+
+   bool (*buffer_get_fd)(struct radeon_winsys *ws,
+			 struct radeon_winsys_bo *bo,
+			 int *fd);
 
    void (*buffer_unmap)(struct radeon_winsys_bo *bo);
 
