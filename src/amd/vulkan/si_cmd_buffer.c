@@ -552,6 +552,12 @@ si_emit_cache_flush(struct radv_cmd_buffer *cmd_buffer)
 	S_0085F0_CB6_DEST_BASE_ENA(1) |
 	S_0085F0_CB7_DEST_BASE_ENA(1);
 
+    cp_coher_cntl |= S_0085F0_DB_ACTION_ENA(1) |
+      S_0085F0_DB_DEST_BASE_ENA(1);
+
+
+    radeon_emit(cmd_buffer->cs, PKT3(PKT3_EVENT_WRITE, 0, 0));
+    radeon_emit(cmd_buffer->cs, EVENT_TYPE(V_028A90_FLUSH_AND_INV_CB_META) | EVENT_INDEX(0));
     radeon_emit(cmd_buffer->cs, PKT3(PKT3_EVENT_WRITE, 0, 0));
     radeon_emit(cmd_buffer->cs, EVENT_TYPE(V_028A90_PS_PARTIAL_FLUSH) | EVENT_INDEX(4));
 

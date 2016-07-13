@@ -199,16 +199,16 @@ radv_emit_graphics_raster_state(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_0286D4_SPI_INTERP_CONTROL_0,
 			   raster->spi_interp_control);
 
-    radeon_set_context_reg(cmd_buffer->cs, R_028A00_PA_SU_POINT_SIZE,
-			   0);
-    radeon_set_context_reg(cmd_buffer->cs, R_028A04_PA_SU_POINT_MINMAX,
-			   0);
-    radeon_set_context_reg(cmd_buffer->cs, R_028A08_PA_SU_LINE_CNTL,
-			   0);
+    radeon_set_context_reg_seq(cmd_buffer->cs, R_028A00_PA_SU_POINT_SIZE, 3);
+    radeon_emit(cmd_buffer->cs, 0);
+    radeon_emit(cmd_buffer->cs, 0); /* R_028A04_PA_SU_POINT_MINMAX */
+    radeon_emit(cmd_buffer->cs, 0); /* R_028A08_PA_SU_LINE_CNTL */
 
     radeon_set_context_reg(cmd_buffer->cs, R_028A48_PA_SC_MODE_CNTL_0,
 			   raster->pa_sc_mode_cntl_0);
 
+    radeon_set_context_reg(cmd_buffer->cs, R_028BDC_PA_SC_LINE_CNTL, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_028BE0_PA_SC_AA_CONFIG, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_028BE4_PA_SU_VTX_CNTL,
 			   raster->pa_su_vtx_cntl);
 
@@ -283,10 +283,10 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_0286CC_SPI_PS_INPUT_ENA,
 			   S_0286CC_LINEAR_CENTER_ENA(1));
     radeon_set_context_reg(cmd_buffer->cs, R_0286D0_SPI_PS_INPUT_ADDR,
-			   0);
+			   S_0286CC_LINEAR_CENTER_ENA(1));
 
     spi_baryc_cntl |= S_0286E0_POS_FLOAT_LOCATION(2);
-    radeon_set_context_reg(cmd_buffer->cs, R_0286D8_SPI_PS_IN_CONTROL, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_0286D8_SPI_PS_IN_CONTROL, 1);
     radeon_set_context_reg(cmd_buffer->cs, R_0286E0_SPI_BARYC_CNTL, spi_baryc_cntl);
 
     radeon_set_context_reg(cmd_buffer->cs, R_028710_SPI_SHADER_Z_FORMAT, V_028710_SPI_SHADER_ZERO);
@@ -295,6 +295,9 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
 
     radeon_set_context_reg(cmd_buffer->cs, R_028238_CB_TARGET_MASK, 0xf);
     radeon_set_context_reg(cmd_buffer->cs, R_02823C_CB_SHADER_MASK, 0xf);
+
+    radeon_set_context_reg(cmd_buffer->cs, R_028644_SPI_PS_INPUT_CNTL_0,
+			   S_028644_FLAT_SHADE(1));
 }
 
 static void

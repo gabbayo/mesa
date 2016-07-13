@@ -1430,6 +1430,7 @@ struct radv_raster_state {
     uint32_t pa_su_point_size;
     uint32_t pa_su_point_minmax;
     uint32_t pa_su_line_cntl;
+    uint32_t pa_sc_line_cntl;
     uint32_t pa_sc_mode_cntl_0;
     uint32_t pa_su_vtx_cntl;
     uint32_t pa_su_poly_offset_clamp;

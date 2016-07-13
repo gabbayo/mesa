@@ -393,16 +393,17 @@ radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
 
     raster->pa_cl_vs_out_cntl = S_02881C_VS_OUT_MISC_SIDE_BUS_ENA(1);
     raster->pa_cl_clip_cntl = S_028810_PS_UCP_MODE(3) |
-	S_028810_DX_CLIP_SPACE_DEF(1) | // TODO verify
+	S_028810_DX_CLIP_SPACE_DEF(0) | // TODO verify
 	S_028810_ZCLIP_NEAR_DISABLE(!vkraster->depthClampEnable) |
 	S_028810_ZCLIP_FAR_DISABLE(!vkraster->depthClampEnable) |
 	S_028810_DX_RASTERIZATION_KILL(vkraster->rasterizerDiscardEnable) |
 	S_028810_DX_LINEAR_ATTR_CLIP_ENA(1);
 
     raster->pa_su_vtx_cntl =
-	S_028BE4_PIX_CENTER(1) | // TODO verify
+	S_028BE4_PIX_CENTER(0) | // TODO verify
 	S_028BE4_QUANT_MODE(V_028BE4_X_16_8_FIXED_POINT_1_256TH);
 
+    raster->pa_sc_mode_cntl_0 = S_028A48_VPORT_SCISSOR_ENABLE(1);
     raster->pa_su_sc_mode_cntl =
         S_028814_FACE(vkraster->frontFace) |
 	S_028814_CULL_FRONT(vkraster->cullMode & VK_CULL_MODE_FRONT_BIT) |
