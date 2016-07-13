@@ -359,15 +359,15 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
       },
       {
          .position = {
-            clear_rect->rect.offset.x + clear_rect->rect.extent.width,
-            clear_rect->rect.offset.y,
+  	    clear_rect->rect.offset.x,
+	    clear_rect->rect.offset.y + clear_rect->rect.extent.height,
          },
          .color = clear_value,
       },
       {
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
-            clear_rect->rect.offset.y + clear_rect->rect.extent.height,
+            clear_rect->rect.offset.y,
          },
          .color = clear_value,
       },
@@ -381,29 +381,6 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
      .offset = offset,
    };
 
-
-   RADV_CALL(CmdSetViewport)(cmd_buffer_h, 0, 1,
-			     (VkViewport[]) {
-			       {
-				 .x = 0,
-				   .y = 0,
-				   .width = fb->width,
-				   .height = fb->height,
-				   
-				   /* Ignored when clearing only stencil. */
-				   .minDepth = 0,
-				   .maxDepth = 0,
-				   },
-				 });
-   RADV_CALL(CmdSetScissor)(cmd_buffer_h, 0, 1,
-			     (VkRect2D[]) {
-			       {
-				 .offset.x = 0,
-				 .offset.y = 0,
-				 .extent.width = fb->width,
-				 .extent.height = fb->height,
-				   }
-				 });
 
    RADV_CALL(CmdBindVertexBuffers)(cmd_buffer_h, 0, 1,
       (VkBuffer[]) { radv_buffer_to_handle(&vertex_buffer) },
@@ -614,16 +591,16 @@ radv_device_init_meta_clear_state(struct radv_device *device)
 
    zero(device->meta_state.clear);
 
-   for (uint32_t i = 0; i < ARRAY_SIZE(state->clear); ++i) {
+   for (uint32_t i = 0; i < 1; /*TODO ARRAY_SIZE(state->clear);*/ ++i) {
       uint32_t samples = 1 << i;
 
-      for (uint32_t j = 0; j < ARRAY_SIZE(state->clear[i].color_pipelines); ++j) {
+      for (uint32_t j = 0; j < 1; /*ARRAY_SIZE(state->clear[i].color_pipelines);*/ ++j) {
          res = create_color_pipeline(device, samples, /* frag_output */ j,
                                      &state->clear[i].color_pipelines[j]);
          if (res != VK_SUCCESS)
             goto fail;
       }
-
+#if 0
       res = create_depthstencil_pipeline(device,
                                          VK_IMAGE_ASPECT_DEPTH_BIT, samples,
                                          &state->clear[i].depth_only_pipeline);
@@ -642,6 +619,7 @@ radv_device_init_meta_clear_state(struct radv_device *device)
                                          &state->clear[i].depthstencil_pipeline);
       if (res != VK_SUCCESS)
          goto fail;
+#endif
    }
 
    return VK_SUCCESS;

@@ -210,15 +210,10 @@ struct radv_shader_variant *radv_shader_variant_create(struct radv_device *devic
    ac_compile_nir_shader(device->target_machine, &binary, &variant->config, shader);
 
    bool scratch_enabled = variant->config.scratch_bytes_per_wave > 0;
-
-   variant->rsrc1 =  S_00B848_VGPRS((variant->config.num_vgprs - 1) / 4) |
-                     S_00B848_SGPRS((variant->config.num_sgprs - 1) / 8) |
-                     S_00B848_DX10_CLAMP(1) |
-                     S_00B848_FLOAT_MODE(variant->config.float_mode);
-
+   unsigned vgpr_comp_cnt = 0;
    switch (shader->stage) {
    case MESA_SHADER_VERTEX:
-     variant->rsrc2 = S_00B12C_USER_SGPR(14) |
+     variant->rsrc2 = S_00B12C_USER_SGPR(12) |
        S_00B12C_SCRATCH_EN(scratch_enabled);
      break;
    case MESA_SHADER_FRAGMENT:
@@ -233,6 +228,12 @@ struct radv_shader_variant *radv_shader_variant_create(struct radv_device *devic
        S_00B84C_LDS_SIZE(variant->config.lds_size);
      break;
    }
+
+   variant->rsrc1 =  S_00B848_VGPRS((variant->config.num_vgprs - 1) / 4) |
+                     S_00B848_SGPRS((variant->config.num_sgprs - 1) / 8) |
+                     S_00B128_VGPR_COMP_CNT(vgpr_comp_cnt) |
+                     S_00B848_DX10_CLAMP(1) |
+                     S_00B848_FLOAT_MODE(variant->config.float_mode);
 
    variant->bo = device->ws->buffer_create(device->ws, binary.code_size, 256,
                                            RADEON_DOMAIN_GTT, RADEON_FLAG_CPU_ACCESS);
@@ -389,7 +390,7 @@ radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
 	S_0286D4_PNT_SPRITE_OVRD_Y(V_0286D4_SPI_PNT_SPRITE_SEL_T) |
 	S_0286D4_PNT_SPRITE_OVRD_Z(V_0286D4_SPI_PNT_SPRITE_SEL_0) |
 	S_0286D4_PNT_SPRITE_OVRD_W(V_0286D4_SPI_PNT_SPRITE_SEL_1) |
-	S_0286D4_PNT_SPRITE_TOP_1(1); // TODO verify
+	S_0286D4_PNT_SPRITE_TOP_1(0); // TODO verify
 
     raster->pa_cl_vs_out_cntl = S_02881C_VS_OUT_MISC_SIDE_BUS_ENA(1);
     raster->pa_cl_clip_cntl = S_028810_PS_UCP_MODE(3) |
@@ -616,6 +617,8 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
    radv_pipeline_init_raster_state(pipeline, pCreateInfo);
 
    pipeline->graphics.prim = si_translate_prim(pCreateInfo->pInputAssemblyState->topology);
+   if (extra && extra->use_rectlist)
+     pipeline->graphics.prim = V_008958_DI_PT_RECTLIST;
    pipeline->graphics.prim_restart_enable = pCreateInfo->pInputAssemblyState->primitiveRestartEnable;
 
    const VkPipelineVertexInputStateCreateInfo *vi_info =
