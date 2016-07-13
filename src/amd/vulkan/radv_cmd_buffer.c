@@ -456,7 +456,7 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 
       for (i = 0; i < num_attribs; i++) {
 	  uint32_t *desc = &((uint32_t *)vb_ptr)[i * 4];
-
+	  uint32_t offset;
 	  int vb = cmd_buffer->state.pipeline->va_binding[i];
 	  struct radv_buffer *buffer = cmd_buffer->state.vertex_bindings[vb].buffer;
 	  uint32_t stride = cmd_buffer->state.pipeline->binding_stride[vb];
@@ -464,10 +464,11 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
 	  device->ws->cs_add_buffer(cmd_buffer->cs, buffer->bo->bo, 8);
 	  va = device->ws->buffer_get_va(buffer->bo->bo);
 
-	  va += buffer->offset + cmd_buffer->state.pipeline->va_offset[i];
+	  offset = buffer->offset + cmd_buffer->state.pipeline->va_offset[i];
+	  va += offset;
 	  desc[0] = va;
 	  desc[1] = S_008F04_BASE_ADDRESS_HI(va >> 32) | S_008F04_STRIDE(stride);
-	  desc[2] = buffer->size;
+	  desc[2] = buffer->size - offset;
 	  //TODO CIK
 	  desc[3] = cmd_buffer->state.pipeline->va_rsrc_word3[i];
 
