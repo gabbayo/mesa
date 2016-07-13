@@ -1255,10 +1255,10 @@ radv_initialise_color_surface(struct radv_device *device,
     cb->cb_color_cmask = va >> 8;
     cb->cb_color_fmask = va >> 8;
     cb->cb_color_view = S_028C6C_SLICE_START(iview->base_layer) |
-	S_028C6C_SLICE_MAX(iview->base_layer + iview->extent.depth);
+	S_028C6C_SLICE_MAX(iview->base_layer + iview->extent.depth - 1);
 
     pitch_tile_max = level_info->nblk_x / 8 - 1;
-    slice_tile_max = level_info->nblk_x * level_info->nblk_y / 64 - 1;
+    slice_tile_max = (level_info->nblk_x * level_info->nblk_y) / 64 - 1;
     tile_mode_index = si_tile_mode_index(iview->image, iview->base_mip, false);
 
     cb->cb_color_pitch = S_028C64_TILE_MAX(pitch_tile_max);
@@ -1403,7 +1403,7 @@ radv_initialise_ds_surface(struct radv_device *device,
     s_offs += iview->image->surface.stencil_level[level].offset;
 
     ds->db_depth_view = S_028008_SLICE_START(iview->base_layer) |
-      S_028008_SLICE_MAX(iview->base_layer + iview->extent.depth);
+      S_028008_SLICE_MAX(iview->base_layer + iview->extent.depth - 1);
     ds->db_depth_info = S_02803C_ADDR5_SWIZZLE_MASK(1);
     ds->db_z_info = S_028040_FORMAT(format);
     ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);

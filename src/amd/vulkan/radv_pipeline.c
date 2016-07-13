@@ -218,7 +218,7 @@ struct radv_shader_variant *radv_shader_variant_create(struct radv_device *devic
 
    switch (shader->stage) {
    case MESA_SHADER_VERTEX:
-     variant->rsrc2 = S_00B12C_USER_SGPR(12) |
+     variant->rsrc2 = S_00B12C_USER_SGPR(14) |
        S_00B12C_SCRATCH_EN(scratch_enabled);
      break;
    case MESA_SHADER_FRAGMENT:

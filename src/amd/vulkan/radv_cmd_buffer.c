@@ -321,10 +321,10 @@ radv_emit_viewport(struct radv_cmd_buffer *cmd_buffer)
 }
 
 static void
-radv_emit_scissor(struct radv_cmd_buffer *cmd_buffeR)
+radv_emit_scissor(struct radv_cmd_buffer *cmd_buffer)
 {
-
-
+    si_write_scissors(cmd_buffer->cs, 0, cmd_buffer->state.dynamic.scissor.count,
+                      cmd_buffer->state.dynamic.scissor.scissors);
 }
 
 static void
@@ -489,11 +489,6 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
     radeon_emit(cmd_buffer->cs, cmd_buffer->state.pipeline->graphics.prim); /* VGT_PRIMITIVE_TYPE */
     radeon_emit(cmd_buffer->cs, ia_multi_vgt_param); /* IA_MULTI_VGT_PARAM */
     radeon_emit(cmd_buffer->cs, ls_hs_config); /* VGT_LS_HS_CONFIG */
-
-    radeon_set_sh_reg_seq(cmd_buffer->cs,
-			  R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
-    radeon_emit(cmd_buffer->cs, 0); /* base vertex */
-    radeon_emit(cmd_buffer->cs, 0);
 
     radeon_set_sh_reg_seq(cmd_buffer->cs,
 			  R_00B030_SPI_SHADER_USER_DATA_PS_0 + 8 * 5, 2);
@@ -992,6 +987,9 @@ void radv_CmdDraw(
     RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
     radv_cmd_buffer_flush_state(cmd_buffer);
 
+    radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
+    radeon_emit(cmd_buffer->cs, firstVertex);
+    radeon_emit(cmd_buffer->cs, firstInstance);
     radeon_emit(cmd_buffer->cs, PKT3(PKT3_NUM_INSTANCES, 0, 0));
     radeon_emit(cmd_buffer->cs, instanceCount);
 
