@@ -338,10 +338,10 @@ radv_pipeline_init_depth_stencil_state(struct radv_pipeline *pipeline,
     memset(ds, 0, sizeof(*ds));
     if (!vkds)
         return;
-    ds->db_depth_control = S_028800_Z_ENABLE(vkds->depthTestEnable) |
-	S_028800_Z_WRITE_ENABLE(vkds->depthWriteEnable) |
-	S_028800_ZFUNC(vkds->depthCompareOp) |
-	S_028800_DEPTH_BOUNDS_ENABLE(vkds->depthBoundsTestEnable);
+    ds->db_depth_control = S_028800_Z_ENABLE(vkds->depthTestEnable ? 1 : 0) |
+       S_028800_Z_WRITE_ENABLE(vkds->depthWriteEnable ? 1 : 0) |
+       S_028800_ZFUNC(vkds->depthCompareOp) |
+       S_028800_DEPTH_BOUNDS_ENABLE(vkds->depthBoundsTestEnable ? 1 : 0);
 
     if (vkds->stencilTestEnable) {
 	ds->db_depth_control |= S_028800_STENCIL_ENABLE(1) | S_028800_BACKFACE_ENABLE(1);
