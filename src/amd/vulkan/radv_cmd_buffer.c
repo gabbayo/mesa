@@ -432,6 +432,20 @@ radv_cmd_buffer_flush_dynamic_state(struct radv_cmd_buffer *cmd_buffer)
 
     }
 
+    if (cmd_buffer->state.dirty & (RADV_CMD_DIRTY_DYNAMIC_STENCIL_REFERENCE |
+				   RADV_CMD_DIRTY_DYNAMIC_STENCIL_WRITE_MASK |
+				   RADV_CMD_DIRTY_DYNAMIC_STENCIL_COMPARE_MASK)) {
+	struct radv_dynamic_state *d = &cmd_buffer->state.dynamic;
+	radeon_set_context_reg_seq(cmd_buffer->cs, R_028430_DB_STENCILREFMASK, 2);
+	radeon_emit(cmd_buffer->cs, S_028430_STENCILTESTVAL(d->stencil_reference.front) |
+		    S_028430_STENCILMASK(d->stencil_compare_mask.front) |
+		    S_028430_STENCILWRITEMASK(d->stencil_write_mask.front) |
+		    S_028430_STENCILOPVAL(1));
+	radeon_emit(cmd_buffer->cs, S_028434_STENCILTESTVAL_BF(d->stencil_reference.back) |
+		    S_028434_STENCILMASK_BF(d->stencil_compare_mask.back) |
+		    S_028434_STENCILWRITEMASK_BF(d->stencil_write_mask.back) |
+		    S_028434_STENCILOPVAL_BF(1));
+    }
     cmd_buffer->state.dirty = 0;
 }
 
