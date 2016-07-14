@@ -23,8 +23,12 @@ radv_init_surface(struct radv_device *device,
 {
    const VkImageCreateInfo *pCreateInfo = create_info->vk_info;
    unsigned array_mode = radv_choose_tiling(device, create_info);
+   const struct util_format_description *desc =
+     vk_format_description(pCreateInfo->format);
    bool is_depth, is_stencil;
 
+   is_depth = vk_format_has_depth(desc);
+   is_stencil = vk_format_has_stencil(desc);
    surface->npix_x = pCreateInfo->extent.width;
    surface->npix_y = pCreateInfo->extent.height;
    surface->npix_z = pCreateInfo->extent.depth;
@@ -56,6 +60,13 @@ radv_init_surface(struct radv_device *device,
    case VK_IMAGE_TYPE_3D:
       surface->flags |= RADEON_SURF_SET(RADEON_SURF_TYPE_3D, TYPE);
       break;
+   }
+
+   if (is_depth) {
+     surface->flags |= RADEON_SURF_ZBUFFER;
+     if (is_stencil)
+       surface->flags |= RADEON_SURF_SBUFFER |
+	 RADEON_SURF_HAS_SBUFFER_MIPTREE;
    }
 
    surface->flags |= RADEON_SURF_HAS_TILE_MODE_INDEX;
