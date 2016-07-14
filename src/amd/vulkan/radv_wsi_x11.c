@@ -611,7 +611,8 @@ x11_image_init(struct radv_device *device, struct x11_swapchain *chain,
          .tiling = VK_IMAGE_TILING_OPTIMAL,
          .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
          .flags = 0,
-      }},
+      },
+      .scanout = true},
       NULL,
       &image_h);
    if (result != VK_SUCCESS)

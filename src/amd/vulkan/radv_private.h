@@ -1674,6 +1674,7 @@ struct radv_image_view {
 struct radv_image_create_info {
    const VkImageCreateInfo *vk_info;
    uint32_t stride;
+   bool scanout;
 };
 
 VkResult radv_image_create(VkDevice _device,

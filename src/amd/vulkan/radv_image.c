@@ -59,6 +59,9 @@ radv_init_surface(struct radv_device *device,
    }
 
    surface->flags |= RADEON_SURF_HAS_TILE_MODE_INDEX;
+
+   if (create_info->scanout)
+       surface->flags |= RADEON_SURF_SCANOUT;
    return 0;
 }
 #define ATI_VENDOR_ID 0x1002
@@ -529,6 +532,7 @@ radv_CreateImage(VkDevice device,
    return radv_image_create(device,
       &(struct radv_image_create_info) {
          .vk_info = pCreateInfo,
+	 .scanout = false,
       },
       pAllocator,
       pImage);
