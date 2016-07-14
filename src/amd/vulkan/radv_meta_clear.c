@@ -35,7 +35,6 @@ struct color_clear_vattrs {
 struct depthstencil_clear_vattrs {
    float position[2];
    float depth_clear;
-   float one;
 };
 
 static void
@@ -444,7 +443,7 @@ create_depthstencil_pipeline(struct radv_device *device,
             /* Position */
             .location = 0,
             .binding = 0,
-            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = offsetof(struct depthstencil_clear_vattrs, position),
          },
       },
@@ -510,7 +509,6 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
             clear_rect->rect.offset.y,
          },
 	 .depth_clear = clear_value.depth,
-	 .one = 1.0,
       },
       {
          .position = {
@@ -518,7 +516,6 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
 	    clear_rect->rect.offset.y + clear_rect->rect.extent.height,
          },
 	 .depth_clear = clear_value.depth,
-	 .one = 1.0,
       },
       {
          .position = {
@@ -526,7 +523,6 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
             clear_rect->rect.offset.y,
          },
 	 .depth_clear = clear_value.depth,
-	 .one = 1.0,
       },
    };
 
