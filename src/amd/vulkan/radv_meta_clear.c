@@ -34,6 +34,8 @@ struct color_clear_vattrs {
 /** Vertex attributes for depthstencil clears.  */
 struct depthstencil_clear_vattrs {
    float position[2];
+   float depth_clear;
+   float one;
 };
 
 static void
@@ -122,7 +124,6 @@ create_pipeline(struct radv_device *device,
                 const VkPipelineDepthStencilStateCreateInfo *ds_state,
                 const VkPipelineColorBlendStateCreateInfo *cb_state,
                 const VkAllocationCallbacks *alloc,
-                bool use_repclear,
                 struct radv_pipeline **pipeline)
 {
    VkDevice device_h = radv_device_to_handle(device);
@@ -291,7 +292,7 @@ create_color_pipeline(struct radv_device *device,
    return
       create_pipeline(device, samples, vs_nir, fs_nir, &vi_state, &ds_state,
                       &cb_state, &device->meta_state.alloc,
-                      /*use_repclear*/ true, pipeline);
+                      pipeline);
 }
 
 static void
@@ -443,7 +444,7 @@ create_depthstencil_pipeline(struct radv_device *device,
             /* Position */
             .location = 0,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_SFLOAT,
+            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
             .offset = offsetof(struct depthstencil_clear_vattrs, position),
          },
       },
@@ -474,7 +475,7 @@ create_depthstencil_pipeline(struct radv_device *device,
 
    return create_pipeline(device, samples, vs_nir, fs_nir, &vi_state, &ds_state,
                           &cb_state, &device->meta_state.alloc,
-                          /*use_repclear*/ true, pipeline);
+                          pipeline);
 }
 
 static void
@@ -508,18 +509,24 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
             clear_rect->rect.offset.x,
             clear_rect->rect.offset.y,
          },
+	 .depth_clear = clear_value.depth,
+	 .one = 1.0,
       },
       {
          .position = {
 	    clear_rect->rect.offset.x,
 	    clear_rect->rect.offset.y + clear_rect->rect.extent.height,
          },
+	 .depth_clear = clear_value.depth,
+	 .one = 1.0,
       },
       {
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
             clear_rect->rect.offset.y,
          },
+	 .depth_clear = clear_value.depth,
+	 .one = 1.0,
       },
    };
 
@@ -530,7 +537,7 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
       .bo = &cmd_buffer->upload.upload_bo,
       .offset = offset,
    };
-
+#if 0
    RADV_CALL(CmdSetViewport)(cmd_buffer_h, 0, 1,
       (VkViewport[]) {
          {
@@ -540,11 +547,11 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
             .height = fb->height,
 
             /* Ignored when clearing only stencil. */
-            .minDepth = clear_value.depth,
-            .maxDepth = clear_value.depth,
+	     .minDepth = 0.0,
+	     .maxDepth = 1.0,
          },
       });
-
+#endif
    if (aspects & VK_IMAGE_ASPECT_STENCIL_BIT) {
       RADV_CALL(CmdSetStencilReference)(cmd_buffer_h, VK_STENCIL_FACE_FRONT_BIT,
                                        clear_value.stencil);
@@ -633,7 +640,7 @@ emit_clear(struct radv_cmd_buffer *cmd_buffer,
    } else {
       assert(clear_att->aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT |
                                       VK_IMAGE_ASPECT_STENCIL_BIT));
-      emit_depthstencil_clear(cmd_buffer, clear_att, clear_rect);
+            emit_depthstencil_clear(cmd_buffer, clear_att, clear_rect);
    }
 }
 

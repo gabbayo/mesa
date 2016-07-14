@@ -264,6 +264,20 @@ vk_format_is_compressed(VkFormat format)
       return false;
    }
 }
+
+static inline bool
+vk_format_has_depth(const struct vk_format_description *desc)
+{
+   return desc->colorspace == VK_FORMAT_COLORSPACE_ZS &&
+          desc->swizzle[0] != VK_SWIZZLE_NONE;
+}
+
+static inline bool
+vk_format_has_stencil(const struct vk_format_description *desc)
+{
+   return desc->colorspace == VK_FORMAT_COLORSPACE_ZS &&
+          desc->swizzle[1] != VK_SWIZZLE_NONE;
+}
 #ifdef __cplusplus
 } // extern "C" {
 #endif

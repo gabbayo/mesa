@@ -289,7 +289,8 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_028000_DB_RENDER_CONTROL, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_028004_DB_COUNT_CONTROL, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_028010_DB_RENDER_OVERRIDE2, 0);
-    radeon_set_context_reg(cmd_buffer->cs, R_02880C_DB_SHADER_CONTROL, 0);
+    radeon_set_context_reg(cmd_buffer->cs, R_02880C_DB_SHADER_CONTROL,
+			   S_02880C_Z_ORDER(V_02880C_EARLY_Z_THEN_LATE_Z));
 
     radeon_set_context_reg(cmd_buffer->cs, R_0286CC_SPI_PS_INPUT_ENA,
 			   ps->config.spi_ps_input_ena);
@@ -371,8 +372,8 @@ radv_emit_fb_ds_state(struct radv_cmd_buffer *cmd_buffer,
 
     radeon_set_context_reg_seq(cmd_buffer->cs, R_02803C_DB_DEPTH_INFO, 9);
     radeon_emit(cmd_buffer->cs, ds->db_depth_info);	/* R_02803C_DB_DEPTH_INFO */
-    radeon_emit(cmd_buffer->cs, ds->db_z_info);// |		/* R_028040_DB_Z_INFO */
-    //		S_028040_ZRANGE_PRECISION(rtex->depth_clear_value != 0));
+    radeon_emit(cmd_buffer->cs, ds->db_z_info |		/* R_028040_DB_Z_INFO */
+		S_028040_ZRANGE_PRECISION(1));
     radeon_emit(cmd_buffer->cs, ds->db_stencil_info);	/* R_028044_DB_STENCIL_INFO */
     radeon_emit(cmd_buffer->cs, ds->db_z_read_base);	/* R_028048_DB_Z_READ_BASE */
     radeon_emit(cmd_buffer->cs, ds->db_stencil_read_base);	/* R_02804C_DB_STENCIL_READ_BASE */

@@ -14,7 +14,7 @@ radv_choose_tiling(struct radv_device *Device,
    if (pCreateInfo->samples > 1)
       return RADEON_SURF_MODE_2D;
 
-   return RADEON_SURF_MODE_1D;
+   return RADEON_SURF_MODE_2D;
 }
 static int
 radv_init_surface(struct radv_device *device,

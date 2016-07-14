@@ -1341,10 +1341,10 @@ radv_initialise_color_surface(struct radv_device *device,
     if (device->instance->physicalDevice.rad_info.chip_class >= VI) {
 	unsigned max_uncompressed_block_size = 2;
 	if (iview->image->samples > 1) {
-	    //	if (rtex->surface.bpe == 1)
-	    //	    max_uncompressed_block_size = 0;
-	    //	else if (rtex->surface.bpe == 2)
-	    //	    max_uncompressed_block_size = 1;
+	  if (iview->image->surface.bpe == 1)
+	    max_uncompressed_block_size = 0;
+	  else if (iview->image->surface.bpe == 2)
+	    max_uncompressed_block_size = 1;
 	}
 
 	cb->cb_dcc_control = S_028C78_MAX_UNCOMPRESSED_BLOCK_SIZE(max_uncompressed_block_size) |
@@ -1406,7 +1406,10 @@ radv_initialise_ds_surface(struct radv_device *device,
       S_028008_SLICE_MAX(iview->base_layer + iview->extent.depth - 1);
     ds->db_depth_info = S_02803C_ADDR5_SWIZZLE_MASK(1);
     ds->db_z_info = S_028040_FORMAT(format);
-    ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);
+    if (iview->image->surface.flags & RADEON_SURF_SBUFFER)
+        ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_8);
+    else
+        ds->db_stencil_info = S_028044_FORMAT(V_028044_STENCIL_INVALID);
 
     if (device->instance->physicalDevice.rad_info.chip_class >= CIK) {
 	struct radeon_info *info = &device->instance->physicalDevice.rad_info;
@@ -1432,6 +1435,8 @@ radv_initialise_ds_surface(struct radv_device *device,
 	ds->db_stencil_info |= S_028044_TILE_MODE_INDEX(tile_mode_index);
     }
 
+    ds->db_htile_data_base = 0;
+    ds->db_htile_surface = 0;
 
     ds->db_z_read_base = ds->db_z_write_base = z_offs >> 8;
     ds->db_stencil_read_base = ds->db_stencil_write_base = s_offs >> 8;
