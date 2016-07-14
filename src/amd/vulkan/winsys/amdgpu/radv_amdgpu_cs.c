@@ -198,6 +198,7 @@ static int amdgpu_winsys_cs_submit(struct radeon_winsys_ctx *_ctx,
       fence->ring = cs->request.ring;
       fence->fence = cs->request.seq_no;
    }
+   ctx->last_seq_no = cs->request.seq_no;
 
    return 0;
 }
@@ -232,11 +233,30 @@ static void amdgpu_ctx_destroy(struct radeon_winsys_ctx *rwctx)
    FREE(ctx);
 }
 
+static void amdgpu_ctx_wait_idle(struct radeon_winsys_ctx *rwctx)
+{
+   struct amdgpu_ctx *ctx = (struct amdgpu_ctx *)rwctx;
+
+   if (ctx->last_seq_no) {
+      uint32_t expired;
+      struct amdgpu_cs_fence fence;
+
+      fence.context = ctx->ctx;
+      fence.ip_type = RING_GFX;
+      fence.ip_instance = 0;
+      fence.ring = 0;
+      fence.fence = ctx->last_seq_no;
+
+      amdgpu_cs_query_fence_status(&fence, AMDGPU_TIMEOUT_INFINITE, 0,
+                                   &expired);
+   }
+}
 
 void radv_amdgpu_cs_init_functions(struct amdgpu_winsys *ws)
 {
    ws->base.ctx_create = amdgpu_ctx_create;
    ws->base.ctx_destroy = amdgpu_ctx_destroy;
+   ws->base.ctx_wait_idle = amdgpu_ctx_wait_idle;
    ws->base.cs_create = amdgpu_cs_create;
    ws->base.cs_destroy = amdgpu_cs_destroy;
    ws->base.cs_reset = amdgpu_cs_reset;

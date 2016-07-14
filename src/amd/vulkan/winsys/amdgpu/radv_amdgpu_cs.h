@@ -11,6 +11,7 @@
 #include "radv_amdgpu_winsys.h"
 struct amdgpu_ctx {
   amdgpu_context_handle ctx;
+  uint64_t last_seq_no;
 };
 
 static inline struct amdgpu_ctx *

@@ -705,7 +705,8 @@ VkResult radv_QueueWaitIdle(
 {
    RADV_FROM_HANDLE(radv_queue, queue, _queue);
 
-   return RADV_CALL(DeviceWaitIdle)(radv_device_to_handle(queue->device));
+   queue->device->ws->ctx_wait_idle(queue->hw_ctx);
+   return VK_SUCCESS;
 }
 
 VkResult radv_DeviceWaitIdle(
