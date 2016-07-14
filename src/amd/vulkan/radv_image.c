@@ -487,6 +487,7 @@ radv_image_create(VkDevice _device,
 
    device->ws->surface_init(device->ws, &image->surface);
    image->size = image->surface.bo_size;
+   image->alignment = image->surface.bo_alignment;
 
    *pImage = radv_image_to_handle(image);
 

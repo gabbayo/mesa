@@ -774,7 +774,7 @@ VkResult radv_AllocateMemory(
      domain = RADEON_DOMAIN_GTT;
    else
      domain = RADEON_DOMAIN_VRAM;
-   mem->bo.bo = device->ws->buffer_create(device->ws, alloc_size, 4096,
+   mem->bo.bo = device->ws->buffer_create(device->ws, alloc_size, 32768,
 					  domain, 0);
 
    mem->type_index = pAllocateInfo->memoryTypeIndex;
