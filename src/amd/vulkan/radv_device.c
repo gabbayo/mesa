@@ -519,16 +519,12 @@ radv_queue_init(struct radv_device *device, struct radv_queue *queue)
    queue->_loader_data.loaderMagic = ICD_LOADER_MAGIC;
    queue->device = device;
 
-   queue->hw_ctx = device->ws->ctx_create(device->ws);
-   if (!queue->hw_ctx)
-      return VK_ERROR_OUT_OF_HOST_MEMORY;
    return VK_SUCCESS;
 }
 
 static void
 radv_queue_finish(struct radv_queue *queue)
 {
-   queue->device->ws->ctx_destroy(queue->hw_ctx);
 }
 
 VkResult radv_CreateDevice(
@@ -571,6 +567,11 @@ VkResult radv_CreateDevice(
       device->alloc = physical_device->instance->alloc;
 
    device->target_machine = ac_create_target_machine(chip_family);
+
+   device->hw_ctx = device->ws->ctx_create(device->ws);
+   if (!device->hw_ctx)
+      return VK_ERROR_OUT_OF_HOST_MEMORY;
+
    radv_queue_init(device, &device->queue);
 
    result = radv_device_init_meta(device);
@@ -590,6 +591,7 @@ void radv_DestroyDevice(
    RADV_FROM_HANDLE(radv_device, device, _device);
 
    LLVMDisposeTargetMachine(device->target_machine);
+   device->ws->ctx_destroy(device->hw_ctx);
    radv_queue_finish(&device->queue);
    radv_device_finish_meta(device);
 
@@ -683,6 +685,7 @@ VkResult radv_QueueSubmit(
   RADV_FROM_HANDLE(radv_fence, fence, _fence);
   struct radv_device *device = queue->device;
   struct radeon_winsys_fence *base_fence = fence ? fence->fence : NULL;
+  struct radeon_winsys_ctx *ctx = queue->device->hw_ctx;
   int ret;
 
   for (uint32_t i = 0; i < submitCount; i++) {
@@ -691,7 +694,7 @@ VkResult radv_QueueSubmit(
 		       pSubmits[i].pCommandBuffers[j]);
       assert(cmd_buffer->level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-      ret = queue->device->ws->cs_submit(queue->hw_ctx, cmd_buffer->cs, base_fence);
+      ret = queue->device->ws->cs_submit(ctx, cmd_buffer->cs, base_fence);
     }
   }
    if (fence)
@@ -705,15 +708,16 @@ VkResult radv_QueueWaitIdle(
 {
    RADV_FROM_HANDLE(radv_queue, queue, _queue);
 
-   queue->device->ws->ctx_wait_idle(queue->hw_ctx);
+   queue->device->ws->ctx_wait_idle(queue->device->hw_ctx);
    return VK_SUCCESS;
 }
 
 VkResult radv_DeviceWaitIdle(
     VkDevice                                    _device)
 {
-  //   RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_device, device, _device);
 
+   device->ws->ctx_wait_idle(device->hw_ctx);
    return VK_SUCCESS;
 }
 

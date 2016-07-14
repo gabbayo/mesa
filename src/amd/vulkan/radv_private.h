@@ -440,8 +440,6 @@ struct radv_queue {
     struct radv_device *                         device;
 
     struct radv_state_pool *                     pool;
-
-   struct radeon_winsys_ctx *hw_ctx;
 };
 
 struct radv_pipeline_cache {
@@ -464,6 +462,7 @@ struct radv_device {
     uint32_t                                    chipset_id;
     struct radeon_winsys *ws;
     LLVMTargetMachineRef target_machine;
+    struct radeon_winsys_ctx *hw_ctx;
 
     struct radv_meta_state                       meta_state;
     struct radv_queue                            queue;
