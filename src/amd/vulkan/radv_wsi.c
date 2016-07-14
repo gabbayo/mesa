@@ -203,7 +203,7 @@ VkResult radv_QueuePresentKHR(
     const VkPresentInfoKHR*                  pPresentInfo)
 {
    RADV_FROM_HANDLE(radv_queue, queue, _queue);
-   VkResult result;
+   VkResult result = VK_SUCCESS;
 
    for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
       RADV_FROM_HANDLE(radv_swapchain, swapchain, pPresentInfo->pSwapchains[i]);
