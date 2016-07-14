@@ -11,10 +11,10 @@ radv_choose_tiling(struct radv_device *Device,
    //   bool force_tiling = templ->flags & R600_RESOURCE_FLAG_FORCE_TILING;
 
    /* MSAA resources must be 2D tiled. */
-   if (pCreateInfo->samples)
+   if (pCreateInfo->samples > 1)
       return RADEON_SURF_MODE_2D;
 
-   return RADEON_SURF_MODE_2D;
+   return RADEON_SURF_MODE_1D;
 }
 static int
 radv_init_surface(struct radv_device *device,
@@ -60,6 +60,7 @@ radv_init_surface(struct radv_device *device,
 
    surface->flags |= RADEON_SURF_HAS_TILE_MODE_INDEX;
 
+   surface->flags |= RADEON_SURF_DISABLE_DCC;
    if (create_info->scanout)
        surface->flags |= RADEON_SURF_SCANOUT;
    return 0;
