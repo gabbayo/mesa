@@ -337,9 +337,6 @@ create_pipeline(struct radv_device *device,
          .subpass = 0,
       },
       &(struct radv_graphics_pipeline_create_info) {
-         .color_attachment_count = -1,
-         .use_repclear = false,
-         .disable_vs = true,
          .use_rectlist = true
       },
       &device->meta_state.alloc,

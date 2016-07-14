@@ -207,9 +207,6 @@ create_pipeline(struct radv_device *device,
          .subpass = 0,
       },
       &(struct radv_graphics_pipeline_create_info) {
-         .color_attachment_count = MAX_RTS,
-         .use_repclear = use_repclear,
-         .disable_vs = true,
          .use_rectlist = true
       },
       alloc,
@@ -314,10 +311,7 @@ radv_device_finish_meta_clear_state(struct radv_device *device)
    struct radv_meta_state *state = &device->meta_state;
 
    for (uint32_t i = 0; i < ARRAY_SIZE(state->clear); ++i) {
-      for (uint32_t j = 0; j < ARRAY_SIZE(state->clear[i].color_pipelines); ++j) {
-         destroy_pipeline(device, state->clear[i].color_pipelines[j]);
-      }
-
+      destroy_pipeline(device, state->clear[i].color_pipeline);
       destroy_pipeline(device, state->clear[i].depth_only_pipeline);
       destroy_pipeline(device, state->clear[i].stencil_only_pipeline);
       destroy_pipeline(device, state->clear[i].depthstencil_pipeline);
@@ -338,7 +332,7 @@ emit_color_clear(struct radv_cmd_buffer *cmd_buffer,
    const uint32_t samples = iview->image->samples;
    const uint32_t samples_log2 = ffs(samples) - 1;
    struct radv_pipeline *pipeline =
-      device->meta_state.clear[samples_log2].color_pipelines[subpass_att];
+     device->meta_state.clear[samples_log2].color_pipeline;
    VkClearColorValue clear_value = clear_att->clearValue.color;
 
    VkCommandBuffer cmd_buffer_h = radv_cmd_buffer_to_handle(cmd_buffer);
@@ -517,14 +511,14 @@ emit_depthstencil_clear(struct radv_cmd_buffer *cmd_buffer,
       },
       {
          .position = {
-            clear_rect->rect.offset.x + clear_rect->rect.extent.width,
-            clear_rect->rect.offset.y,
+	    clear_rect->rect.offset.x,
+	    clear_rect->rect.offset.y + clear_rect->rect.extent.height,
          },
       },
       {
          .position = {
             clear_rect->rect.offset.x + clear_rect->rect.extent.width,
-            clear_rect->rect.offset.y + clear_rect->rect.extent.height,
+            clear_rect->rect.offset.y,
          },
       },
    };
@@ -594,13 +588,11 @@ radv_device_init_meta_clear_state(struct radv_device *device)
    for (uint32_t i = 0; i < 1; /*TODO ARRAY_SIZE(state->clear);*/ ++i) {
       uint32_t samples = 1 << i;
 
-      for (uint32_t j = 0; j < 1; /*ARRAY_SIZE(state->clear[i].color_pipelines);*/ ++j) {
-         res = create_color_pipeline(device, samples, /* frag_output */ j,
-                                     &state->clear[i].color_pipelines[j]);
-         if (res != VK_SUCCESS)
-            goto fail;
-      }
-#if 0
+      res = create_color_pipeline(device, samples, 0,
+				  &state->clear[i].color_pipeline);
+      if (res != VK_SUCCESS)
+	goto fail;
+
       res = create_depthstencil_pipeline(device,
                                          VK_IMAGE_ASPECT_DEPTH_BIT, samples,
                                          &state->clear[i].depth_only_pipeline);
@@ -619,7 +611,6 @@ radv_device_init_meta_clear_state(struct radv_device *device)
                                          &state->clear[i].depthstencil_pipeline);
       if (res != VK_SUCCESS)
          goto fail;
-#endif
    }
 
    return VK_SUCCESS;
@@ -642,7 +633,7 @@ emit_clear(struct radv_cmd_buffer *cmd_buffer,
    } else {
       assert(clear_att->aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT |
                                       VK_IMAGE_ASPECT_STENCIL_BIT));
-      //      emit_depthstencil_clear(cmd_buffer, clear_att, clear_rect);
+      emit_depthstencil_clear(cmd_buffer, clear_att, clear_rect);
    }
 }
 

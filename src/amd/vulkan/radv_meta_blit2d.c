@@ -813,9 +813,6 @@ blit2d_init_pipeline(struct radv_device *device,
    };
 
    const struct radv_graphics_pipeline_create_info radv_pipeline_info = {
-      .color_attachment_count = -1,
-      .use_repclear = false,
-      .disable_vs = true,
       .use_rectlist = true
    };
 

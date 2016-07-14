@@ -560,15 +560,7 @@ struct radv_meta_state {
     * Use array element `i` for images with `2^i` samples.
     */
    struct {
-      /**
-       * Pipeline N is used to clear color attachment N of the current
-       * subpass.
-       *
-       * HACK: We use one pipeline per color attachment to work around the
-       * compiler's inability to dynamically set the render target index of
-       * the render target write message.
-       */
-      struct radv_pipeline *color_pipelines[MAX_RTS];
+      struct radv_pipeline *color_pipeline;
 
       struct radv_pipeline *depth_only_pipeline;
       struct radv_pipeline *stencil_only_pipeline;
@@ -1448,7 +1440,6 @@ struct radv_pipeline {
 
   //   struct radv_pipeline_layout *                 layout;
 
-   bool                                         use_repclear;
    bool                                         needs_data_cache;
 
    struct radv_shader_variant *                 shaders[MESA_SHADER_STAGES];
@@ -1501,14 +1492,6 @@ get_cs_prog_data(struct anv_pipeline *pipeline)
 }
 #endif
 struct radv_graphics_pipeline_create_info {
-   /**
-    * If non-negative, overrides the color attachment count of the pipeline's
-    * subpass.
-    */
-   int8_t color_attachment_count;
-
-   bool                                         use_repclear;
-   bool                                         disable_vs;
    bool                                         use_rectlist;
 };
 
