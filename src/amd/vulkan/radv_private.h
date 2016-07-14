@@ -286,180 +286,6 @@ struct radv_bo {
    struct radeon_winsys_bo *bo;
 };
 
-#if 0
-/* Represents a lock-free linked list of "free" things.  This is used by
- * both the block pool and the state pools.  Unfortunately, in order to
- * solve the ABA problem, we can't use a single uint32_t head.
- */
-union anv_free_list {
-   struct {
-      int32_t offset;
-
-      /* A simple count that is incremented every time the head changes. */
-      uint32_t count;
-   };
-   uint64_t u64;
-};
-
-#define ANV_FREE_LIST_EMPTY ((union anv_free_list) { { 1, 0 } })
-
-struct anv_block_state {
-   union {
-      struct {
-         uint32_t next;
-         uint32_t end;
-      };
-      uint64_t u64;
-   };
-};
-
-struct anv_block_pool {
-   struct anv_device *device;
-
-   struct radv_bo bo;
-
-   /* The offset from the start of the bo to the "center" of the block
-    * pool.  Pointers to allocated blocks are given by
-    * bo.map + center_bo_offset + offsets.
-    */
-   uint32_t center_bo_offset;
-
-   /* Current memory map of the block pool.  This pointer may or may not
-    * point to the actual beginning of the block pool memory.  If
-    * anv_block_pool_alloc_back has ever been called, then this pointer
-    * will point to the "center" position of the buffer and all offsets
-    * (negative or positive) given out by the block pool alloc functions
-    * will be valid relative to this pointer.
-    *
-    * In particular, map == bo.map + center_offset
-    */
-   void *map;
-   int fd;
-
-   /**
-    * Array of mmaps and gem handles owned by the block pool, reclaimed when
-    * the block pool is destroyed.
-    */
-   struct radv_vector mmap_cleanups;
-
-   uint32_t block_size;
-
-   union anv_free_list free_list;
-   struct anv_block_state state;
-
-   union anv_free_list back_free_list;
-   struct anv_block_state back_state;
-};
-
-/* Block pools are backed by a fixed-size 2GB memfd */
-#define BLOCK_POOL_MEMFD_SIZE (1ull << 32)
-
-/* The center of the block pool is also the middle of the memfd.  This may
- * change in the future if we decide differently for some reason.
- */
-#define BLOCK_POOL_MEMFD_CENTER (BLOCK_POOL_MEMFD_SIZE / 2)
-
-static inline uint32_t
-anv_block_pool_size(struct anv_block_pool *pool)
-{
-   return pool->state.end + pool->back_state.end;
-}
-
-struct anv_state {
-   int32_t offset;
-   uint32_t alloc_size;
-   void *map;
-};
-
-struct anv_fixed_size_state_pool {
-   size_t state_size;
-   union anv_free_list free_list;
-   struct anv_block_state block;
-};
-
-#define ANV_MIN_STATE_SIZE_LOG2 6
-#define ANV_MAX_STATE_SIZE_LOG2 10
-
-#define ANV_STATE_BUCKETS (ANV_MAX_STATE_SIZE_LOG2 - ANV_MIN_STATE_SIZE_LOG2)
-
-struct anv_state_pool {
-   struct anv_block_pool *block_pool;
-   struct anv_fixed_size_state_pool buckets[ANV_STATE_BUCKETS];
-};
-
-struct anv_state_stream_block;
-
-struct anv_state_stream {
-   struct anv_block_pool *block_pool;
-
-   /* The current working block */
-   struct anv_state_stream_block *block;
-
-   /* Offset at which the current block starts */
-   uint32_t start;
-   /* Offset at which to allocate the next state */
-   uint32_t next;
-   /* Offset at which the current block ends */
-   uint32_t end;
-};
-
-#define CACHELINE_SIZE 64
-#define CACHELINE_MASK 63
-
-static inline void
-anv_clflush_range(void *start, size_t size)
-{
-   void *p = (void *) (((uintptr_t) start) & ~CACHELINE_MASK);
-   void *end = start + size;
-
-   __builtin_ia32_mfence();
-   while (p < end) {
-      __builtin_ia32_clflush(p);
-      p += CACHELINE_SIZE;
-   }
-}
-
-static void inline
-anv_state_clflush(struct anv_state state)
-{
-   anv_clflush_range(state.map, state.alloc_size);
-}
-
-void anv_block_pool_init(struct anv_block_pool *pool,
-                         struct anv_device *device, uint32_t block_size);
-void anv_block_pool_finish(struct anv_block_pool *pool);
-int32_t anv_block_pool_alloc(struct anv_block_pool *pool);
-int32_t anv_block_pool_alloc_back(struct anv_block_pool *pool);
-void anv_block_pool_free(struct anv_block_pool *pool, int32_t offset);
-void anv_state_pool_init(struct anv_state_pool *pool,
-                         struct anv_block_pool *block_pool);
-void anv_state_pool_finish(struct anv_state_pool *pool);
-struct anv_state anv_state_pool_alloc(struct anv_state_pool *pool,
-                                      size_t state_size, size_t alignment);
-void anv_state_pool_free(struct anv_state_pool *pool, struct anv_state state);
-void anv_state_stream_init(struct anv_state_stream *stream,
-                           struct anv_block_pool *block_pool);
-void anv_state_stream_finish(struct anv_state_stream *stream);
-struct anv_state anv_state_stream_alloc(struct anv_state_stream *stream,
-                                        uint32_t size, uint32_t alignment);
-
-/**
- * Implements a pool of re-usable BOs.  The interface is identical to that
- * of block_pool except that each block is its own BO.
- */
-struct anv_bo_pool {
-   struct anv_device *device;
-
-   void *free_list[16];
-};
-
-void anv_bo_pool_init(struct anv_bo_pool *pool, struct anv_device *device);
-void anv_bo_pool_finish(struct anv_bo_pool *pool);
-VkResult anv_bo_pool_alloc(struct anv_bo_pool *pool, struct radv_bo *bo,
-                           uint32_t size);
-void anv_bo_pool_free(struct anv_bo_pool *pool, const struct radv_bo *bo);
-
-#endif 
 void *radv_resolve_entrypoint(uint32_t index);
 void *radv_lookup_entrypoint(const char *name);
 
@@ -628,25 +454,6 @@ struct radv_pipeline_cache {
    uint32_t                                     kernel_count;
    uint32_t *                                   hash_table;
 };
-#if 0
-
-struct anv_pipeline_bind_map;
-
-void anv_pipeline_cache_init(struct anv_pipeline_cache *cache,
-                             struct anv_device *device);
-void anv_pipeline_cache_finish(struct anv_pipeline_cache *cache);
-uint32_t anv_pipeline_cache_search(struct anv_pipeline_cache *cache,
-                                   const unsigned char *sha1,
-                                   const struct brw_stage_prog_data **prog_data,
-                                   struct anv_pipeline_bind_map *map);
-uint32_t anv_pipeline_cache_upload_kernel(struct anv_pipeline_cache *cache,
-                                          const unsigned char *sha1,
-                                          const void *kernel,
-                                          size_t kernel_size,
-                                          const struct brw_stage_prog_data **prog_data,
-                                          size_t prog_data_size,
-                                          struct anv_pipeline_bind_map *map);
-#endif
 
 struct radv_device {
     VK_LOADER_DATA                              _loader_data;
@@ -659,240 +466,10 @@ struct radv_device {
     LLVMTargetMachineRef target_machine;
 
     struct radv_meta_state                       meta_state;
-#if 0
-    struct brw_device_info                      info;
-    struct isl_device                           isl_dev;
-    int                                         context_id;
-    int                                         fd;
-    bool                                        can_chain_batches;
-    bool                                        robust_buffer_access;
-
-    struct anv_bo_pool                          batch_bo_pool;
-
-    struct anv_block_pool                       dynamic_state_block_pool;
-    struct anv_state_pool                       dynamic_state_pool;
-
-    struct anv_block_pool                       instruction_block_pool;
-    struct anv_pipeline_cache                   default_pipeline_cache;
-
-    struct anv_block_pool                       surface_state_block_pool;
-    struct anv_state_pool                       surface_state_pool;
-
-    struct anv_bo                               workaround_bo;
-
-
-
-    struct anv_state                            border_colors;
-
-
-    struct anv_block_pool                       scratch_block_pool;
-
-    uint32_t                                    default_mocs;
-
-    pthread_mutex_t                             mutex;
-  #endif
-   struct radv_queue                            queue;
+    struct radv_queue                            queue;
 };
 
 void radv_device_get_cache_uuid(void *uuid);
-#if 0
-
-void* anv_gem_mmap(struct anv_device *device,
-                   uint32_t gem_handle, uint64_t offset, uint64_t size, uint32_t flags);
-void anv_gem_munmap(void *p, uint64_t size);
-uint32_t anv_gem_create(struct anv_device *device, size_t size);
-void anv_gem_close(struct anv_device *device, uint32_t gem_handle);
-uint32_t anv_gem_userptr(struct anv_device *device, void *mem, size_t size);
-int anv_gem_wait(struct anv_device *device, uint32_t gem_handle, int64_t *timeout_ns);
-int anv_gem_execbuffer(struct anv_device *device,
-                       struct drm_i915_gem_execbuffer2 *execbuf);
-int anv_gem_set_tiling(struct anv_device *device, uint32_t gem_handle,
-                       uint32_t stride, uint32_t tiling);
-int anv_gem_create_context(struct anv_device *device);
-int anv_gem_destroy_context(struct anv_device *device, int context);
-int anv_gem_get_param(int fd, uint32_t param);
-bool anv_gem_get_bit6_swizzle(int fd, uint32_t tiling);
-int anv_gem_get_aperture(int fd, uint64_t *size);
-int anv_gem_handle_to_fd(struct anv_device *device, uint32_t gem_handle);
-uint32_t anv_gem_fd_to_handle(struct anv_device *device, int fd);
-int anv_gem_set_caching(struct anv_device *device, uint32_t gem_handle, uint32_t caching);
-int anv_gem_set_domain(struct anv_device *device, uint32_t gem_handle,
-                       uint32_t read_domains, uint32_t write_domain);
-
-VkResult anv_bo_init_new(struct anv_bo *bo, struct anv_device *device, uint64_t size);
-
-struct anv_reloc_list {
-   size_t                                       num_relocs;
-   size_t                                       array_length;
-   struct drm_i915_gem_relocation_entry *       relocs;
-   struct anv_bo **                             reloc_bos;
-};
-
-VkResult anv_reloc_list_init(struct anv_reloc_list *list,
-                             const VkAllocationCallbacks *alloc);
-void anv_reloc_list_finish(struct anv_reloc_list *list,
-                           const VkAllocationCallbacks *alloc);
-
-uint64_t anv_reloc_list_add(struct anv_reloc_list *list,
-                            const VkAllocationCallbacks *alloc,
-                            uint32_t offset, struct anv_bo *target_bo,
-                            uint32_t delta);
-
-struct anv_batch_bo {
-   /* Link in the anv_cmd_buffer.owned_batch_bos list */
-   struct list_head                             link;
-
-   struct anv_bo                                bo;
-
-   /* Bytes actually consumed in this batch BO */
-   size_t                                       length;
-
-   /* Last seen surface state block pool bo offset */
-   uint32_t                                     last_ss_pool_bo_offset;
-
-   struct anv_reloc_list                        relocs;
-};
-
-struct anv_batch {
-   const VkAllocationCallbacks *                alloc;
-
-   void *                                       start;
-   void *                                       end;
-   void *                                       next;
-
-   struct anv_reloc_list *                      relocs;
-
-   /* This callback is called (with the associated user data) in the event
-    * that the batch runs out of space.
-    */
-   VkResult (*extend_cb)(struct anv_batch *, void *);
-   void *                                       user_data;
-};
-
-void *anv_batch_emit_dwords(struct anv_batch *batch, int num_dwords);
-void anv_batch_emit_batch(struct anv_batch *batch, struct anv_batch *other);
-uint64_t anv_batch_emit_reloc(struct anv_batch *batch,
-                              void *location, struct anv_bo *bo, uint32_t offset);
-VkResult anv_device_submit_simple_batch(struct anv_device *device,
-                                        struct anv_batch *batch);
-
-struct anv_address {
-   struct anv_bo *bo;
-   uint32_t offset;
-};
-
-#define __gen_address_type struct anv_address
-#define __gen_user_data struct anv_batch
-
-static inline uint64_t
-__gen_combine_address(struct anv_batch *batch, void *location,
-                      const struct anv_address address, uint32_t delta)
-{
-   if (address.bo == NULL) {
-      return address.offset + delta;
-   } else {
-      assert(batch->start <= location && location < batch->end);
-
-      return anv_batch_emit_reloc(batch, location, address.bo, address.offset + delta);
-   }
-}
-
-/* Wrapper macros needed to work around preprocessor argument issues.  In
- * particular, arguments don't get pre-evaluated if they are concatenated.
- * This means that, if you pass GENX(3DSTATE_PS) into the emit macro, the
- * GENX macro won't get evaluated if the emit macro contains "cmd ## foo".
- * We can work around this easily enough with these helpers.
- */
-#define __anv_cmd_length(cmd) cmd ## _length
-#define __anv_cmd_length_bias(cmd) cmd ## _length_bias
-#define __anv_cmd_header(cmd) cmd ## _header
-#define __anv_cmd_pack(cmd) cmd ## _pack
-#define __anv_reg_num(reg) reg ## _num
-
-#define anv_pack_struct(dst, struc, ...) do {                              \
-      struct struc __template = {                                          \
-         __VA_ARGS__                                                       \
-      };                                                                   \
-      __anv_cmd_pack(struc)(NULL, dst, &__template);                       \
-      VG(VALGRIND_CHECK_MEM_IS_DEFINED(dst, __anv_cmd_length(struc) * 4)); \
-   } while (0)
-
-#define anv_batch_emitn(batch, n, cmd, ...) ({          \
-      void *__dst = anv_batch_emit_dwords(batch, n);    \
-      struct cmd __template = {                         \
-         __anv_cmd_header(cmd),                         \
-        .DWordLength = n - __anv_cmd_length_bias(cmd),  \
-         __VA_ARGS__                                    \
-      };                                                \
-      __anv_cmd_pack(cmd)(batch, __dst, &__template);   \
-      __dst;                                            \
-   })
-
-#define anv_batch_emit_merge(batch, dwords0, dwords1)                   \
-   do {                                                                 \
-      uint32_t *dw;                                                     \
-                                                                        \
-      static_assert(ARRAY_SIZE(dwords0) == ARRAY_SIZE(dwords1), "mismatch merge"); \
-      dw = anv_batch_emit_dwords((batch), ARRAY_SIZE(dwords0));         \
-      for (uint32_t i = 0; i < ARRAY_SIZE(dwords0); i++)                \
-         dw[i] = (dwords0)[i] | (dwords1)[i];                           \
-      VG(VALGRIND_CHECK_MEM_IS_DEFINED(dw, ARRAY_SIZE(dwords0) * 4));\
-   } while (0)
-
-#define anv_batch_emit(batch, cmd, name)                            \
-   for (struct cmd name = { __anv_cmd_header(cmd) },                    \
-        *_dst = anv_batch_emit_dwords(batch, __anv_cmd_length(cmd));    \
-        __builtin_expect(_dst != NULL, 1);                              \
-        ({ __anv_cmd_pack(cmd)(batch, _dst, &name);                     \
-           VG(VALGRIND_CHECK_MEM_IS_DEFINED(_dst, __anv_cmd_length(cmd) * 4)); \
-           _dst = NULL;                                                 \
-         }))
-
-#define anv_state_pool_emit(pool, cmd, align, ...) ({                   \
-      const uint32_t __size = __anv_cmd_length(cmd) * 4;                \
-      struct anv_state __state =                                        \
-         anv_state_pool_alloc((pool), __size, align);                   \
-      struct cmd __template = {                                         \
-         __VA_ARGS__                                                    \
-      };                                                                \
-      __anv_cmd_pack(cmd)(NULL, __state.map, &__template);              \
-      VG(VALGRIND_CHECK_MEM_IS_DEFINED(__state.map, __anv_cmd_length(cmd) * 4)); \
-      if (!(pool)->block_pool->device->info.has_llc)                    \
-         anv_state_clflush(__state);                                    \
-      __state;                                                          \
-   })
-
-#define GEN7_MOCS (struct GEN7_MEMORY_OBJECT_CONTROL_STATE) {  \
-   .GraphicsDataTypeGFDT                        = 0,           \
-   .LLCCacheabilityControlLLCCC                 = 0,           \
-   .L3CacheabilityControlL3CC                   = 1,           \
-}
-
-#define GEN75_MOCS (struct GEN75_MEMORY_OBJECT_CONTROL_STATE) {  \
-   .LLCeLLCCacheabilityControlLLCCC             = 0,           \
-   .L3CacheabilityControlL3CC                   = 1,           \
-}
-
-#define GEN8_MOCS (struct GEN8_MEMORY_OBJECT_CONTROL_STATE) {  \
-      .MemoryTypeLLCeLLCCacheabilityControl = WB,              \
-      .TargetCache = L3DefertoPATforLLCeLLCselection,          \
-      .AgeforQUADLRU = 0                                       \
-   }
-
-/* Skylake: MOCS is now an index into an array of 62 different caching
- * configurations programmed by the kernel.
- */
-
-#define GEN9_MOCS (struct GEN9_MEMORY_OBJECT_CONTROL_STATE) {  \
-      /* TC=LLC/eLLC, LeCC=WB, LRUM=3, L3CC=WB */              \
-      .IndextoMOCSTables                           = 2         \
-   }
-
-#define GEN9_MOCS_PTE {                                 \
-      /* TC=LLC/eLLC, LeCC=WB, LRUM=3, L3CC=WB */       \
-      .IndextoMOCSTables                           = 1  \
-   }
-#endif
 
 struct radv_device_memory {
    struct radv_bo                               bo;
@@ -950,42 +527,6 @@ struct radv_descriptor_set {
    struct radv_bo *descriptors[0];
 };
 
-#if 0
-struct anv_descriptor_pool {
-   uint32_t size;
-   uint32_t next;
-   uint32_t free_list;
-
-   struct anv_state_stream surface_state_stream;
-   void *surface_state_free_list;
-
-   char data[0];
-};
-
-VkResult
-anv_descriptor_set_create(struct anv_device *device,
-                          struct anv_descriptor_pool *pool,
-                          const struct anv_descriptor_set_layout *layout,
-                          struct anv_descriptor_set **out_set);
-
-void
-anv_descriptor_set_destroy(struct anv_device *device,
-                           struct anv_descriptor_pool *pool,
-                           struct anv_descriptor_set *set);
-
-#define ANV_DESCRIPTOR_SET_COLOR_ATTACHMENTS UINT16_MAX
-
-struct anv_pipeline_binding {
-   /* The descriptor set this surface corresponds to.  The special value of
-    * ANV_DESCRIPTOR_SET_COLOR_ATTACHMENTS indicates that the offset refers
-    * to a color attachment and not a regular descriptor.
-    */
-   uint16_t set;
-
-   /* Offset into the descriptor set or attachment list. */
-   uint16_t offset;
-};
-#endif
 struct radv_pipeline_layout {
    struct {
       struct radv_descriptor_set_layout *layout;
@@ -1028,79 +569,11 @@ enum radv_cmd_dirty_bits {
 };
 typedef uint32_t radv_cmd_dirty_mask_t;
 
-#if 0
-
-enum anv_pipe_bits {
-   ANV_PIPE_DEPTH_CACHE_FLUSH_BIT            = (1 << 0),
-   ANV_PIPE_STALL_AT_SCOREBOARD_BIT          = (1 << 1),
-   ANV_PIPE_STATE_CACHE_INVALIDATE_BIT       = (1 << 2),
-   ANV_PIPE_CONSTANT_CACHE_INVALIDATE_BIT    = (1 << 3),
-   ANV_PIPE_VF_CACHE_INVALIDATE_BIT          = (1 << 4),
-   ANV_PIPE_DATA_CACHE_FLUSH_BIT             = (1 << 5),
-   ANV_PIPE_TEXTURE_CACHE_INVALIDATE_BIT     = (1 << 10),
-   ANV_PIPE_INSTRUCTION_CACHE_INVALIDATE_BIT = (1 << 11),
-   ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT    = (1 << 12),
-   ANV_PIPE_DEPTH_STALL_BIT                  = (1 << 13),
-   ANV_PIPE_CS_STALL_BIT                     = (1 << 20),
-
-   /* This bit does not exist directly in PIPE_CONTROL.  Instead it means that
-    * a flush has happened but not a CS stall.  The next time we do any sort
-    * of invalidation we need to insert a CS stall at that time.  Otherwise,
-    * we would have to CS stall on every flush which could be bad.
-    */
-   ANV_PIPE_NEEDS_CS_STALL_BIT               = (1 << 21),
-};
-
-#define ANV_PIPE_FLUSH_BITS ( \
-   ANV_PIPE_DEPTH_CACHE_FLUSH_BIT | \
-   ANV_PIPE_DATA_CACHE_FLUSH_BIT | \
-   ANV_PIPE_RENDER_TARGET_CACHE_FLUSH_BIT)
-
-#define ANV_PIPE_STALL_BITS ( \
-   ANV_PIPE_STALL_AT_SCOREBOARD_BIT | \
-   ANV_PIPE_DEPTH_STALL_BIT | \
-   ANV_PIPE_CS_STALL_BIT)
-
-#define ANV_PIPE_INVALIDATE_BITS ( \
-   ANV_PIPE_STATE_CACHE_INVALIDATE_BIT | \
-   ANV_PIPE_CONSTANT_CACHE_INVALIDATE_BIT | \
-   ANV_PIPE_VF_CACHE_INVALIDATE_BIT | \
-   ANV_PIPE_DATA_CACHE_FLUSH_BIT | \
-   ANV_PIPE_TEXTURE_CACHE_INVALIDATE_BIT | \
-   ANV_PIPE_INSTRUCTION_CACHE_INVALIDATE_BIT)
-#endif
 struct radv_vertex_binding {
    struct radv_buffer *                          buffer;
    VkDeviceSize                                 offset;
 };
-#if 0
-struct anv_push_constants {
-   /* Current allocated size of this push constants data structure.
-    * Because a decent chunk of it may not be used (images on SKL, for
-    * instance), we won't actually allocate the entire structure up-front.
-    */
-   uint32_t size;
 
-   /* Push constant data provided by the client through vkPushConstants */
-   uint8_t client_data[MAX_PUSH_CONSTANTS_SIZE];
-
-   /* Our hardware only provides zero-based vertex and instance id so, in
-    * order to satisfy the vulkan requirements, we may have to push one or
-    * both of these into the shader.
-    */
-   uint32_t base_vertex;
-   uint32_t base_instance;
-
-   /* Offsets and ranges for dynamically bound buffers */
-   struct {
-      uint32_t offset;
-      uint32_t range;
-   } dynamic[MAX_DYNAMIC_BUFFERS];
-
-   /* Image data for image_load_store on pre-SKL */
-   struct brw_image_param images[MAX_IMAGES];
-};
-#endif
 struct radv_dynamic_state {
    struct {
       uint32_t                                  count;
@@ -1157,52 +630,6 @@ struct radv_attachment_state {
    VkImageAspectFlags                           pending_clear_aspects;
    VkClearValue                                 clear_value;
 };
-#if 0
-
-/** State required while building cmd buffer */
-struct anv_cmd_state {
-   /* PIPELINE_SELECT.PipelineSelection */
-   uint32_t                                     current_pipeline;
-   const struct anv_l3_config *                 current_l3_config;
-   uint32_t                                     vertex_descriptors_dirty;
-   anv_cmd_dirty_mask_t                         dirty;
-   anv_cmd_dirty_mask_t                         compute_dirty;
-   enum anv_pipe_bits                           pending_pipe_bits;
-   uint32_t                                     num_workgroups_offset;
-   struct anv_bo                                *num_workgroups_bo;
-   VkShaderStageFlags                           descriptors_dirty;
-   VkShaderStageFlags                           push_constants_dirty;
-   uint32_t                                     scratch_size;
-   struct anv_pipeline *                        pipeline;
-   struct anv_pipeline *                        compute_pipeline;
-   struct anv_framebuffer *                     framebuffer;
-   struct anv_render_pass *                     pass;
-   struct anv_subpass *                         subpass;
-   VkRect2D                                     render_area;
-   uint32_t                                     restart_index;
-   struct anv_vertex_binding                    vertex_bindings[MAX_VBS];
-   struct anv_descriptor_set *                  descriptors[MAX_SETS];
-   VkShaderStageFlags                           push_constant_stages;
-   struct anv_push_constants *                  push_constants[MESA_SHADER_STAGES];
-   struct anv_state                             binding_tables[MESA_SHADER_STAGES];
-   struct anv_state                             samplers[MESA_SHADER_STAGES];
-   struct anv_dynamic_state                     dynamic;
-   bool                                         need_query_wa;
-
-   /**
-    * Array length is anv_cmd_state::pass::attachment_count. Array content is
-    * valid only when recording a render pass instance.
-    */
-   struct anv_attachment_state *                attachments;
-
-   struct {
-      struct anv_buffer *                       index_buffer;
-      uint32_t                                  index_type; /**< 3DSTATE_INDEX_BUFFER.IndexFormat */
-      uint32_t                                  index_offset;
-   } gen7;
-};
-
-#endif
 
 struct radv_cmd_state {
     uint32_t                                      vb_dirty;
@@ -1272,82 +699,10 @@ void
 radv_cmd_buffer_upload_data(struct radv_cmd_buffer *cmd_buffer,
 			    unsigned size, unsigned alignmnet,
 			    const void *data, unsigned *out_offset);
-#if 0
-VkResult anv_cmd_buffer_init_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
-void anv_cmd_buffer_fini_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
-void anv_cmd_buffer_reset_batch_bo_chain(struct anv_cmd_buffer *cmd_buffer);
-void anv_cmd_buffer_end_batch_buffer(struct anv_cmd_buffer *cmd_buffer);
-void anv_cmd_buffer_add_secondary(struct anv_cmd_buffer *primary,
-                                  struct anv_cmd_buffer *secondary);
-void anv_cmd_buffer_prepare_execbuf(struct anv_cmd_buffer *cmd_buffer);
-
-VkResult anv_cmd_buffer_emit_binding_table(struct anv_cmd_buffer *cmd_buffer,
-                                           unsigned stage, struct anv_state *bt_state);
-VkResult anv_cmd_buffer_emit_samplers(struct anv_cmd_buffer *cmd_buffer,
-                                      unsigned stage, struct anv_state *state);
-uint32_t gen7_cmd_buffer_flush_descriptor_sets(struct anv_cmd_buffer *cmd_buffer);
-void gen7_cmd_buffer_emit_descriptor_pointers(struct anv_cmd_buffer *cmd_buffer,
-                                              uint32_t stages);
-
-struct anv_state anv_cmd_buffer_emit_dynamic(struct anv_cmd_buffer *cmd_buffer,
-                                             const void *data, uint32_t size, uint32_t alignment);
-struct anv_state anv_cmd_buffer_merge_dynamic(struct anv_cmd_buffer *cmd_buffer,
-                                              uint32_t *a, uint32_t *b,
-                                              uint32_t dwords, uint32_t alignment);
-
-struct anv_address
-anv_cmd_buffer_surface_base_address(struct anv_cmd_buffer *cmd_buffer);
-struct anv_state
-anv_cmd_buffer_alloc_binding_table(struct anv_cmd_buffer *cmd_buffer,
-                                   uint32_t entries, uint32_t *state_offset);
-struct anv_state
-anv_cmd_buffer_alloc_surface_state(struct anv_cmd_buffer *cmd_buffer);
-struct anv_state
-anv_cmd_buffer_alloc_dynamic_state(struct anv_cmd_buffer *cmd_buffer,
-                                   uint32_t size, uint32_t alignment);
-
-VkResult
-anv_cmd_buffer_new_binding_table_block(struct anv_cmd_buffer *cmd_buffer);
-
-void gen8_cmd_buffer_emit_viewport(struct anv_cmd_buffer *cmd_buffer);
-void gen7_cmd_buffer_emit_scissor(struct anv_cmd_buffer *cmd_buffer);
-
-void anv_cmd_buffer_emit_state_base_address(struct anv_cmd_buffer *cmd_buffer);
-
-void anv_cmd_state_setup_attachments(struct anv_cmd_buffer *cmd_buffer,
-                                     const VkRenderPassBeginInfo *info);
-
-void anv_cmd_buffer_set_subpass(struct anv_cmd_buffer *cmd_buffer,
-                                  struct anv_subpass *subpass);
-
-struct anv_state
-anv_cmd_buffer_push_constants(struct anv_cmd_buffer *cmd_buffer,
-                              gl_shader_stage stage);
-struct anv_state
-anv_cmd_buffer_cs_push_constants(struct anv_cmd_buffer *cmd_buffer);
-#endif
 void radv_cmd_buffer_clear_subpass(struct radv_cmd_buffer *cmd_buffer);
 void radv_cmd_buffer_resolve_subpass(struct radv_cmd_buffer *cmd_buffer);
-#if 0
-const struct anv_image_view *
-anv_cmd_buffer_get_depth_stencil_view(const struct anv_cmd_buffer *cmd_buffer);
 
-void anv_cmd_buffer_dump(struct anv_cmd_buffer *cmd_buffer);
-
-struct anv_fence {
-   struct anv_bo bo;
-   struct drm_i915_gem_execbuffer2 execbuf;
-   struct drm_i915_gem_exec_object2 exec2_objects[1];
-   bool ready;
-};
-
-struct anv_event {
-   uint64_t                                     semaphore;
-   struct anv_state                             state;
-};
-
-#endif
-  struct nir_shader;
+struct nir_shader;
 
 struct radv_shader_module {
    struct nir_shader *                          nir;
@@ -1381,18 +736,6 @@ mesa_to_vk_shader_stage(gl_shader_stage mesa_stage)
         __tmp = (gl_shader_stage)((stage_bits) & RADV_STAGE_MASK);    \
         stage = __builtin_ffs(__tmp) - 1, __tmp;                     \
         __tmp &= ~(1 << (stage)))
-#if 0
-struct anv_pipeline_bind_map {
-   uint32_t surface_count;
-   uint32_t sampler_count;
-   uint32_t image_count;
-   uint32_t attachment_count;
-
-   struct anv_pipeline_binding *                surface_to_descriptor;
-   struct anv_pipeline_binding *                sampler_to_descriptor;
-   uint32_t *                                   surface_to_attachment;
-};
-#endif
 
 struct radv_shader_variant {
    struct radeon_winsys_bo *bo;
@@ -1466,31 +809,7 @@ struct radv_pipeline {
        } compute;
    };
 };
-#if 0
-static inline const struct brw_vs_prog_data *
-get_vs_prog_data(struct anv_pipeline *pipeline)
-{
-   return (const struct brw_vs_prog_data *) pipeline->prog_data[MESA_SHADER_VERTEX];
-}
 
-static inline const struct brw_gs_prog_data *
-get_gs_prog_data(struct anv_pipeline *pipeline)
-{
-   return (const struct brw_gs_prog_data *) pipeline->prog_data[MESA_SHADER_GEOMETRY];
-}
-
-static inline const struct brw_wm_prog_data *
-get_wm_prog_data(struct anv_pipeline *pipeline)
-{
-   return (const struct brw_wm_prog_data *) pipeline->prog_data[MESA_SHADER_FRAGMENT];
-}
-
-static inline const struct brw_cs_prog_data *
-get_cs_prog_data(struct anv_pipeline *pipeline)
-{
-   return (const struct brw_cs_prog_data *) pipeline->prog_data[MESA_SHADER_COMPUTE];
-}
-#endif
 struct radv_graphics_pipeline_create_info {
    bool                                         use_rectlist;
 };
@@ -1501,16 +820,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline, struct radv_device *device,
                   const VkGraphicsPipelineCreateInfo *pCreateInfo,
                   const struct radv_graphics_pipeline_create_info *extra,
                   const VkAllocationCallbacks *alloc);
-#if 0
 
-VkResult
-anv_pipeline_compile_cs(struct anv_pipeline *pipeline,
-                        struct anv_pipeline_cache *cache,
-                        const VkComputePipelineCreateInfo *info,
-                        struct anv_shader_module *module,
-                        const char *entrypoint,
-                        const VkSpecializationInfo *spec_info);
-#endif
 VkResult
 radv_graphics_pipeline_create(VkDevice device,
                              VkPipelineCache cache,
@@ -1531,48 +841,6 @@ uint32_t radv_translate_dbformat(VkFormat format);
 uint32_t radv_translate_texformat(VkFormat format,
 				  const struct vk_format_description *desc,
 				  int first_non_void);
-#if 0
-struct anv_format_swizzle {
-   enum isl_channel_select r:4;
-   enum isl_channel_select g:4;
-   enum isl_channel_select b:4;
-   enum isl_channel_select a:4;
-};
-
-struct anv_format {
-   enum isl_format isl_format:16;
-   struct anv_format_swizzle swizzle;
-};
-
-struct anv_format
-anv_get_format(const struct brw_device_info *devinfo, VkFormat format,
-               VkImageAspectFlags aspect, VkImageTiling tiling);
-
-static inline enum isl_format
-anv_get_isl_format(const struct brw_device_info *devinfo, VkFormat vk_format,
-                   VkImageAspectFlags aspect, VkImageTiling tiling)
-{
-   return anv_get_format(devinfo, vk_format, aspect, tiling).isl_format;
-}
-
-void
-anv_compute_urb_partition(struct anv_pipeline *pipeline);
-
-void
-anv_setup_pipeline_l3_config(struct anv_pipeline *pipeline);
-
-/**
- * Subsurface of an anv_image.
- */
-struct anv_surface {
-   struct isl_surf isl;
-
-   /**
-    * Offset from VkImage's base address, as bound by vkBindImageMemory().
-    */
-   uint32_t offset;
-};
-#endif
 
 struct radv_image {
    VkImageType type;
@@ -1594,7 +862,7 @@ struct radv_image {
    /* Set when bound */
    struct radv_bo *bo;
    VkDeviceSize offset;
-  uint32_t dcc_offset;
+   uint32_t dcc_offset;
    /**
     * Image subsurfaces
     *
@@ -1608,16 +876,6 @@ struct radv_image {
     * bo.
     */
    struct radeon_surf surface;
-#if 0
-   union {
-      struct anv_surface color_surface;
-
-      struct {
-         struct anv_surface depth_surface;
-         struct anv_surface stencil_surface;
-      };
-   };
-#endif
 };
 
 static inline uint32_t
@@ -1734,21 +992,6 @@ radv_sanitize_image_offset(const VkImageType imageType,
    }
 }
 
-#if 0
-void anv_fill_buffer_surface_state(struct anv_device *device,
-                                   struct anv_state state,
-                                   enum isl_format format,
-                                   uint32_t offset, uint32_t range,
-                                   uint32_t stride);
-
-void anv_image_view_fill_image_param(struct anv_device *device,
-                                     struct anv_image_view *view,
-                                     struct brw_image_param *param);
-void anv_buffer_view_fill_image_param(struct anv_device *device,
-                                      struct anv_buffer_view *view,
-                                      struct brw_image_param *param);
-
-#endif
 struct radv_sampler {
    uint32_t state[4];
 };
@@ -1838,29 +1081,9 @@ struct radv_render_pass {
 };
 
 extern struct radv_render_pass radv_meta_dummy_renderpass;
-#if 0
 
-
-struct anv_query_pool_slot {
-   uint64_t begin;
-   uint64_t end;
-   uint64_t available;
-};
-
-struct anv_query_pool {
-   VkQueryType                                  type;
-   uint32_t                                     slots;
-   struct anv_bo                                bo;
-};
-#endif
 VkResult radv_device_init_meta(struct radv_device *device);
 void radv_device_finish_meta(struct radv_device *device);
-
-#if 0
-void anv_dump_image_to_ppm(struct anv_device *device,
-                           struct anv_image *image, unsigned miplevel,
-                           unsigned array_layer, const char *filename);
-#endif
 
 #define RADV_DEFINE_HANDLE_CASTS(__radv_type, __VkType)                      \
                                                                            \
@@ -1933,27 +1156,6 @@ RADV_DEFINE_NONDISP_HANDLE_CASTS(radv_shader_module, VkShaderModule)
 RADV_DEFINE_STRUCT_CASTS(radv_common, VkMemoryBarrier)
 RADV_DEFINE_STRUCT_CASTS(radv_common, VkBufferMemoryBarrier)
 RADV_DEFINE_STRUCT_CASTS(radv_common, VkImageMemoryBarrier)
-
-#if 0
-/* Gen-specific function declarations */
-#ifdef genX
-#  include "anv_genX.h"
-#else
-#  define genX(x) gen7_##x
-#  include "anv_genX.h"
-#  undef genX
-#  define genX(x) gen75_##x
-#  include "anv_genX.h"
-#  undef genX
-#  define genX(x) gen8_##x
-#  include "anv_genX.h"
-#  undef genX
-#  define genX(x) gen9_##x
-#  include "anv_genX.h"
-#  undef genX
-#endif
-#endif
-
 
 #ifdef __cplusplus
 }
