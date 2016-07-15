@@ -1521,6 +1521,113 @@ void vkCmdDbgMarkerEnd(
 {
 }
 
+static unsigned radv_tex_wrap(VkSamplerAddressMode address_mode)
+{
+    switch (address_mode) {
+    case VK_SAMPLER_ADDRESS_MODE_REPEAT:
+	return V_008F30_SQ_TEX_WRAP;
+    case VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT:
+	return V_008F30_SQ_TEX_MIRROR;
+    case VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE:
+	return V_008F30_SQ_TEX_CLAMP_LAST_TEXEL;
+    case VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER:
+	return V_008F30_SQ_TEX_CLAMP_BORDER;
+    case VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE:
+	return V_008F30_SQ_TEX_MIRROR_ONCE_LAST_TEXEL;
+    default:
+	unreachable("illegal tex wrap mode");
+	break;
+    }
+}
+
+static unsigned
+radv_tex_compare(VkCompareOp op)
+{
+    switch (op) {
+    case VK_COMPARE_OP_NEVER:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_NEVER;
+    case VK_COMPARE_OP_LESS:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_LESS;
+    case VK_COMPARE_OP_EQUAL:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_EQUAL;
+    case VK_COMPARE_OP_LESS_OR_EQUAL:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_LESSEQUAL;
+    case VK_COMPARE_OP_GREATER:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_GREATER;
+    case VK_COMPARE_OP_NOT_EQUAL:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_NOTEQUAL;
+    case VK_COMPARE_OP_GREATER_OR_EQUAL:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_GREATEREQUAL;
+    case VK_COMPARE_OP_ALWAYS:
+	return V_008F30_SQ_TEX_DEPTH_COMPARE_ALWAYS;
+    default:
+	unreachable("illegal compare mode");
+	break;
+    }
+}
+
+static unsigned
+radv_tex_filter(VkFilter filter, unsigned max_ansio)
+{
+    switch (filter) {
+    case VK_FILTER_NEAREST:
+	return (max_ansio > 1 ? V_008F38_SQ_TEX_XY_FILTER_ANISO_POINT :
+		V_008F38_SQ_TEX_XY_FILTER_POINT);
+    case VK_FILTER_LINEAR:
+	return (max_ansio > 1 ? V_008F38_SQ_TEX_XY_FILTER_ANISO_BILINEAR :
+		V_008F38_SQ_TEX_XY_FILTER_BILINEAR);
+    case VK_FILTER_CUBIC_IMG:
+    default:
+	fprintf(stderr, "illegal texture filter");
+	return 0;
+    }
+}
+
+static unsigned
+radv_tex_mipfilter(VkSamplerMipmapMode mode)
+{
+    switch (mode) {
+    case VK_SAMPLER_MIPMAP_MODE_NEAREST:
+	return V_008F38_SQ_TEX_Z_FILTER_POINT;
+    case VK_SAMPLER_MIPMAP_MODE_LINEAR:
+	return V_008F38_SQ_TEX_Z_FILTER_LINEAR;
+    default:
+	return V_008F38_SQ_TEX_Z_FILTER_NONE;
+    }
+}
+
+static void
+radv_init_sampler(struct radv_device *device,
+		  struct radv_sampler *sampler,
+		  const VkSamplerCreateInfo *pCreateInfo)
+{
+    uint32_t max_aniso = 0;
+    uint32_t max_aniso_ratio = 0;//TODO
+    bool is_vi;
+    is_vi = (device->instance->physicalDevice.rad_info.chip_class >= VI);
+
+    sampler->state[0] = (S_008F30_CLAMP_X(radv_tex_wrap(pCreateInfo->addressModeU)) |
+			 S_008F30_CLAMP_Y(radv_tex_wrap(pCreateInfo->addressModeV)) |
+			 S_008F30_CLAMP_Z(radv_tex_wrap(pCreateInfo->addressModeW)) |
+			 S_008F30_MAX_ANISO_RATIO(max_aniso_ratio) |
+			 S_008F30_DEPTH_COMPARE_FUNC(radv_tex_compare(pCreateInfo->compareOp)) |
+			 S_008F30_FORCE_UNNORMALIZED(pCreateInfo->unnormalizedCoordinates ? 1 : 0) |
+			 S_008F30_DISABLE_CUBE_WRAP(0) |
+			 S_008F30_COMPAT_MODE(is_vi));
+    sampler->state[1] = (S_008F34_MIN_LOD(S_FIXED(CLAMP(pCreateInfo->minLod, 0, 15), 8)) |
+			 S_008F34_MAX_LOD(S_FIXED(CLAMP(pCreateInfo->maxLod, 0, 15), 8)));
+    sampler->state[2] = (S_008F38_LOD_BIAS(S_FIXED(CLAMP(pCreateInfo->mipLodBias, -16, 16), 8)) |
+			 S_008F38_XY_MAG_FILTER(radv_tex_filter(pCreateInfo->magFilter, max_aniso)) |
+			 S_008F38_XY_MIN_FILTER(radv_tex_filter(pCreateInfo->minFilter, max_aniso)) |
+			 S_008F38_MIP_FILTER(radv_tex_mipfilter(pCreateInfo->mipmapMode)) |
+			 S_008F38_MIP_POINT_PRECLAMP(1) |
+			 S_008F38_DISABLE_LSB_CEIL(1) |
+			 S_008F38_FILTER_PREC_FIX(1) |
+			 S_008F38_ANISO_OVERRIDE(is_vi));
+    sampler->state[3] = (S_008F3C_BORDER_COLOR_PTR(0) |
+			 S_008F3C_BORDER_COLOR_TYPE(0));
+}
+
 VkResult radv_CreateSampler(
     VkDevice                                    _device,
     const VkSamplerCreateInfo*                  pCreateInfo,
@@ -1536,6 +1643,8 @@ VkResult radv_CreateSampler(
                         VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
    if (!sampler)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   radv_init_sampler(device, sampler, pCreateInfo);
    *pSampler = radv_sampler_to_handle(sampler);
 
    return VK_SUCCESS;
