@@ -713,6 +713,11 @@ void radv_CmdBindDescriptorSets(
             ws->cs_add_buffer(cmd_buffer->cs, set->descriptors[j]->bo, 7);
 
       radeon_set_sh_reg_seq(cmd_buffer->cs,
+                                     R_00B030_SPI_SHADER_USER_DATA_PS_0 + 8 * idx, 2);
+      radeon_emit(cmd_buffer->cs, va);
+      radeon_emit(cmd_buffer->cs, va >> 32);
+
+      radeon_set_sh_reg_seq(cmd_buffer->cs,
                                      R_00B900_COMPUTE_USER_DATA_0 + 8 * idx, 2);
       radeon_emit(cmd_buffer->cs, va);
       radeon_emit(cmd_buffer->cs, va >> 32);
