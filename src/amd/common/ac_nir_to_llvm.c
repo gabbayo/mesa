@@ -170,6 +170,36 @@ static LLVMTypeRef const_array(LLVMTypeRef elem_type, int num_elements)
 	                       CONST_ADDR_SPACE);
 }
 
+static LLVMValueRef to_integer(struct nir_to_llvm_context *ctx, LLVMValueRef v)
+{
+	LLVMTypeRef type = LLVMTypeOf(v);
+	if (type == ctx->f32) {
+		return LLVMBuildBitCast(ctx->builder, v, ctx->i32, "");
+	} else if (LLVMGetTypeKind(type) == LLVMVectorTypeKind) {
+		LLVMTypeRef elem_type = LLVMGetElementType(type);
+		if (elem_type == ctx->f32) {
+			LLVMTypeRef nt = LLVMVectorType(ctx->i32, LLVMGetVectorSize(type));
+			return LLVMBuildBitCast(ctx->builder, v, nt, "");
+		}
+	}
+	return v;
+}
+
+static LLVMValueRef to_float(struct nir_to_llvm_context *ctx, LLVMValueRef v)
+{
+	LLVMTypeRef type = LLVMTypeOf(v);
+	if (type == ctx->i32) {
+		return LLVMBuildBitCast(ctx->builder, v, ctx->f32, "");
+	} else if (LLVMGetTypeKind(type) == LLVMVectorTypeKind) {
+		LLVMTypeRef elem_type = LLVMGetElementType(type);
+		if (elem_type == ctx->i32) {
+			LLVMTypeRef nt = LLVMVectorType(ctx->f32, LLVMGetVectorSize(type));
+			return LLVMBuildBitCast(ctx->builder, v, nt, "");
+		}
+	}
+	return v;
+}
+
 static LLVMValueRef build_indexed_load(struct nir_to_llvm_context *ctx,
 				       LLVMValueRef base_ptr, LLVMValueRef index,
 				       bool uniform)
@@ -602,13 +632,13 @@ static LLVMValueRef visit_load_var(struct nir_to_llvm_context *ctx,
 		for (unsigned chan = 0; chan < 4; chan++) {
 			values[chan] = ctx->inputs[radeon_llvm_reg_index_soa(idx, chan)];
 		}
-		return build_gather_values(ctx, values, 4);
+		return to_integer(ctx, build_gather_values(ctx, values, 4));
 		break;
 	case nir_var_local:
 		for (unsigned chan = 0; chan < 4; chan++) {
 			values[chan] = LLVMBuildLoad(ctx->builder, ctx->locals[idx * 4 + chan], "");
 		}
-		return build_gather_values(ctx, values, 4);
+		return to_integer(ctx, build_gather_values(ctx, values, 4));
 	default:
 		break;
 	}
@@ -621,7 +651,7 @@ visit_store_var(struct nir_to_llvm_context *ctx,
 {
 	LLVMValueRef temp_ptr, value;
 	int idx = instr->variables[0]->var->data.driver_location;
-	LLVMValueRef src = get_src(ctx, instr->src[0]);
+	LLVMValueRef src = to_float(ctx, get_src(ctx, instr->src[0]));
 	int writemask = instr->const_index[0];
 	switch (instr->variables[0]->var->data.mode) {
 	case nir_var_shader_out:
@@ -698,7 +728,7 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 {
 	LLVMValueRef result = NULL;
 
-	result = ctx->v4f32empty;
+	result = to_integer(ctx, ctx->v4f32empty);
 	if (result) {
 		assert(instr->dest.is_ssa);
 		_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
