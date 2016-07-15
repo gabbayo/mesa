@@ -856,13 +856,18 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 	unsigned dmask = 0xf;
 	LLVMValueRef address[16];
 	LLVMValueRef coords[5];
+	LLVMValueRef coord;
+	LLVMTypeRef data_type = ctx->i32;
 	int count = 0;
 	int num_coords = instr->coord_components;
 
 	result = to_integer(ctx, ctx->v4f32empty);
 
 	assert(instr->src[0].type == nir_tex_src_coord);
-	set_tex_fetch_args(ctx, &tinfo, get_src(ctx, instr->src[0].src), 0, dmask);
+	coord = get_src(ctx, instr->src[0].src);
+	coord = trim_vector(ctx, coord,
+			    instr->coord_components);
+	set_tex_fetch_args(ctx, &tinfo, coord, 0, dmask);
 
 	result = build_tex_intrinsic(ctx, instr, &tinfo);
 
