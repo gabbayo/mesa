@@ -23,7 +23,7 @@ radv_init_surface(struct radv_device *device,
 {
    const VkImageCreateInfo *pCreateInfo = create_info->vk_info;
    unsigned array_mode = radv_choose_tiling(device, create_info);
-   const struct util_format_description *desc =
+   const struct vk_format_description *desc =
      vk_format_description(pCreateInfo->format);
    bool is_depth, is_stencil;
 
