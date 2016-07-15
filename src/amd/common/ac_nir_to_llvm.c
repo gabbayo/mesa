@@ -63,6 +63,8 @@ struct nir_to_llvm_context {
 
 	LLVMValueRef alpha_ref;
 	LLVMValueRef prim_mask;
+	LLVMValueRef persp_sample, persp_center, persp_centroid;
+	LLVMValueRef linear_sample, linear_center, linear_centroid;
 
 	LLVMBasicBlockRef continue_block;
 	LLVMBasicBlockRef break_block;
@@ -71,6 +73,8 @@ struct nir_to_llvm_context {
 	LLVMTypeRef i8;
 	LLVMTypeRef i16;
 	LLVMTypeRef i32;
+	LLVMTypeRef v2i32;
+	LLVMTypeRef v3i32;
 	LLVMTypeRef v4i32;
 	LLVMTypeRef v8i32;
 	LLVMTypeRef f32;
@@ -263,6 +267,13 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		arg_types[arg_idx++] = ctx->f32; /* alpha ref */
 		arg_types[arg_idx++] = ctx->i32; /* prim mask */
 		sgpr_count = arg_idx;
+		arg_types[arg_idx++] = ctx->v2i32; /* persp sample */
+		arg_types[arg_idx++] = ctx->v2i32; /* persp center */
+		arg_types[arg_idx++] = ctx->v2i32; /* persp centroid */
+		arg_types[arg_idx++] = ctx->v3i32; /* persp pull model */
+		arg_types[arg_idx++] = ctx->v2i32; /* linear sample */
+		arg_types[arg_idx++] = ctx->v2i32; /* linear center */
+		arg_types[arg_idx++] = ctx->v2i32; /* linear centroid */
 		break;
 	default:
 		unreachable("Shader stage not implemented");
@@ -294,6 +305,14 @@ static void create_function(struct nir_to_llvm_context *ctx,
 	case MESA_SHADER_FRAGMENT:
 		ctx->alpha_ref = LLVMGetParam(ctx->main_function, arg_idx++);
 		ctx->prim_mask = LLVMGetParam(ctx->main_function, arg_idx++);
+
+		ctx->persp_sample = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->persp_center = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->persp_centroid = LLVMGetParam(ctx->main_function, arg_idx++);
+		arg_idx++;
+		ctx->linear_sample = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->linear_center = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->linear_centroid = LLVMGetParam(ctx->main_function, arg_idx++);
 		break;
 	default:
 		unreachable("Shader stage not implemented");
@@ -309,6 +328,8 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->i8 = LLVMIntTypeInContext(ctx->context, 8);
 	ctx->i16 = LLVMIntTypeInContext(ctx->context, 16);
 	ctx->i32 = LLVMIntTypeInContext(ctx->context, 32);
+	ctx->v2i32 = LLVMVectorType(ctx->i32, 2);
+	ctx->v3i32 = LLVMVectorType(ctx->i32, 3);
 	ctx->v4i32 = LLVMVectorType(ctx->i32, 4);
 	ctx->v8i32 = LLVMVectorType(ctx->i32, 8);
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
@@ -993,16 +1014,18 @@ handle_vs_input_decl(struct nir_to_llvm_context *ctx,
 	}
 }
 
-static int lookup_interp_param_index(enum glsl_interp_qualifier interp, unsigned location)
+static LLVMValueRef lookup_interp_param(struct nir_to_llvm_context *ctx,
+					enum glsl_interp_qualifier interp, unsigned location)
 {
 	switch (interp) {
-	case INTERP_QUALIFIER_NONE:
 	case INTERP_QUALIFIER_FLAT:
 	default:
-		return 0;
+		return NULL;
 	case INTERP_QUALIFIER_SMOOTH:
+	case INTERP_QUALIFIER_NONE:
+		return ctx->persp_center;
 	case INTERP_QUALIFIER_NOPERSPECTIVE:
-		return 0;
+		return ctx->linear_center;
 	}
 }
 
@@ -1051,12 +1074,9 @@ handle_fs_input_decl(struct nir_to_llvm_context *ctx,
 		     struct nir_variable *variable)
 {
 	int idx = ctx->num_inputs++;
-	int interp_param_idx;
 	LLVMValueRef interp_param = NULL;
 
-	interp_param_idx = lookup_interp_param_index(variable->data.interpolation, 0);
-	if (interp_param_idx == -1)
-		return;
+	interp_param = lookup_interp_param(ctx, variable->data.interpolation, 0);
 
 	interp_fs_input(ctx, variable, idx, interp_param, ctx->prim_mask,
 			&ctx->inputs[radeon_llvm_reg_index_soa(idx, 0)]);
