@@ -327,6 +327,9 @@ si_make_texture_descriptor(struct radv_device *device,
 				state[7] = 0xffffffff;
 		}
 	}
+
+	if (fmask_state)
+	  memset(fmask_state, 0, (8 * 4));
 #if 0
 	/* Initialize the sampler view for FMASK. */
 	if (tex->fmask.size) {
@@ -534,6 +537,25 @@ radv_image_view_init(struct radv_image_view *iview,
    };
    iview->base_layer = range->baseArrayLayer;
    iview->base_mip = range->baseMipLevel;
+
+   static const unsigned char swizzle[] = {
+      VK_SWIZZLE_X,
+      VK_SWIZZLE_Y,
+      VK_SWIZZLE_Z,
+      VK_SWIZZLE_W
+   };
+   si_make_texture_descriptor(device, image, false,
+			      pCreateInfo->format,
+			      swizzle,
+			      range->baseMipLevel,
+			      range->baseMipLevel,
+			      range->baseArrayLayer,
+			      range->baseArrayLayer + image->extent.depth - 1,
+			      iview->extent.width,
+			      iview->extent.height,
+			      iview->extent.depth,
+			      iview->descriptor,
+			      iview->fmask_descriptor);
 }
 
 VkResult
