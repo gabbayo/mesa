@@ -1014,8 +1014,8 @@ handle_vs_input_decl(struct nir_to_llvm_context *ctx,
 	for (unsigned chan = 0; chan < 4; chan++) {
 		LLVMValueRef llvm_chan = LLVMConstInt(ctx->i32, chan, false);
 		ctx->inputs[radeon_llvm_reg_index_soa(idx, chan)] =
-			LLVMBuildExtractElement(ctx->builder,
-						input, llvm_chan, "");
+			to_integer(ctx, LLVMBuildExtractElement(ctx->builder,
+						input, llvm_chan, ""));
 	}
 }
 
@@ -1222,8 +1222,8 @@ handle_vs_outputs_post(struct nir_to_llvm_context *ctx,
 	for (i = 0; i < ctx->num_outputs; i++) {
 		for (unsigned j = 0; j < 4; j++)
 			outputs[i].values[j] =
-				LLVMBuildLoad(ctx->builder,
-					      ctx->outputs[i][j], "");
+				to_float(ctx, LLVMBuildLoad(ctx->builder,
+					      ctx->outputs[i][j], ""));
 	}
 
 	index = 0;
