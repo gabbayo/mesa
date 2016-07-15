@@ -780,7 +780,7 @@ struct radv_pipeline {
     uint32_t                                     dynamic_state_mask;
     struct radv_dynamic_state                     dynamic_state;
 
-  //   struct radv_pipeline_layout *                 layout;
+    struct radv_pipeline_layout *                 layout;
 
    bool                                         needs_data_cache;
 

@@ -579,6 +579,7 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
      alloc = &device->alloc;
 
    pipeline->device = device;
+   pipeline->layout = radv_pipeline_layout_from_handle(pCreateInfo->layout);
 
    radv_pipeline_init_dynamic_state(pipeline, pCreateInfo);
    const VkPipelineShaderStageCreateInfo *pStages[MESA_SHADER_STAGES] = { 0, };
