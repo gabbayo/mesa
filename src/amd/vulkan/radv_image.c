@@ -556,6 +556,8 @@ radv_image_view_init(struct radv_image_view *iview,
 			      iview->extent.depth,
 			      iview->descriptor,
 			      iview->fmask_descriptor);
+   si_set_mutable_tex_desc_fields(device, image, &image->surface.level[0], 0, 0,
+				  image->surface.blk_w, false, iview->descriptor);
 }
 
 VkResult
