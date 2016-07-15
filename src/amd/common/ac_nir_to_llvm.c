@@ -863,7 +863,6 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 
 	result = to_integer(ctx, ctx->v4f32empty);
 
-	assert(instr->src[0].type == nir_tex_src_coord);
 	coord = get_src(ctx, instr->src[0].src);
 	coord = trim_vector(ctx, coord,
 			    instr->coord_components);
