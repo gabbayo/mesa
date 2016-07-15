@@ -700,7 +700,7 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 
 	result = ctx->v4f32empty;
 	if (result) {
-		assert(info->has_dest && instr->dest.is_ssa);
+		assert(instr->dest.is_ssa);
 		_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
 	}
 }
