@@ -39,6 +39,12 @@ enum radeon_llvm_calling_convention {
 #define RADEON_LLVM_MAX_INPUTS 32 * 4
 #define RADEON_LLVM_MAX_OUTPUTS 32
 
+enum desc_type {
+	DESC_IMAGE,
+	DESC_FMASK,
+	DESC_SAMPLER
+};
+
 struct nir_to_llvm_context {
 	LLVMContextRef context;
 	LLVMModuleRef module;
@@ -66,6 +72,7 @@ struct nir_to_llvm_context {
 	LLVMTypeRef i16;
 	LLVMTypeRef i32;
 	LLVMTypeRef v4i32;
+	LLVMTypeRef v8i32;
 	LLVMTypeRef f32;
 	LLVMTypeRef v4f32;
 	LLVMTypeRef v16i8;
@@ -88,6 +95,12 @@ struct nir_to_llvm_context {
 	int num_outputs;
 	int num_locals;
 	LLVMValueRef *locals;
+};
+
+struct ac_tex_info {
+	LLVMValueRef args[12];
+	int arg_count;
+	LLVMTypeRef dst_type;
 };
 
 struct si_shader_output_values
@@ -297,6 +310,7 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->i16 = LLVMIntTypeInContext(ctx->context, 16);
 	ctx->i32 = LLVMIntTypeInContext(ctx->context, 32);
 	ctx->v4i32 = LLVMVectorType(ctx->i32, 4);
+	ctx->v8i32 = LLVMVectorType(ctx->i32, 8);
 	ctx->f32 = LLVMFloatTypeInContext(ctx->context);
 	ctx->v4f32 = LLVMVectorType(ctx->f32, 4);
 	ctx->v16i8 = LLVMVectorType(ctx->i8, 16);
@@ -524,6 +538,26 @@ emit_llvm_intrinsic(struct nir_to_llvm_context *ctx, const char *name,
 	return LLVMBuildCall(ctx->builder, function, params, param_count, "");
 }
 
+static LLVMValueRef build_tex_intrinsic(struct nir_to_llvm_context *ctx,
+					nir_tex_instr *instr,
+					struct ac_tex_info *tinfo)
+{
+	const char *name = "llvm.SI.image.sample";
+	const char *infix = "";
+	char intr_name[127];
+	char type[64];
+
+	if (instr->coord_components > 1)
+		snprintf(type, 6, "v%ui32", instr->coord_components);
+	else
+		strcpy(type, "i32");
+	sprintf(intr_name, "%s%s.%s", name, infix, type);
+
+	return emit_llvm_intrinsic(ctx, intr_name, tinfo->dst_type, tinfo->args, tinfo->arg_count,
+				   LLVMReadNoneAttribute | LLVMNoUnwindAttribute);
+
+}
+
 static LLVMValueRef visit_vulkan_resource_index(struct nir_to_llvm_context *ctx,
                                                 nir_intrinsic_instr *instr)
 {
@@ -724,11 +758,93 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 	}
 }
 
+static LLVMValueRef get_sampler_desc_custom(struct nir_to_llvm_context *ctx,
+					    LLVMValueRef list,
+					    LLVMValueRef index,
+					    enum desc_type type)
+{
+    LLVMBuilderRef builder = ctx->builder;
+    switch (type) {
+    case DESC_IMAGE:
+	/* The image is at [0:7]. */
+	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, 2, 0), "");
+	list = LLVMBuildPointerCast(builder, list,
+				    const_array(ctx->v8i32, 0), "");
+	break;
+    case DESC_FMASK:
+	/* The FMASK is at [8:15]. */
+	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, 2, 0), "");
+	index = LLVMBuildAdd(builder, index, LLVMConstInt(ctx->i32, 1, 0), "");
+	break;
+    case DESC_SAMPLER:
+	/* The sampler state is at [12:15]. */
+	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, 4, 0), "");
+	index = LLVMBuildAdd(builder, index, LLVMConstInt(ctx->i32, 3, 0), "");
+	list = LLVMBuildPointerCast(builder, list,
+				    const_array(ctx->v4i32, 0), "");
+	break;
+    }
+    return build_indexed_load_const(ctx, list, index);
+}
+
+/* dirty hack */
+static LLVMValueRef get_sampler_desc_hack(struct nir_to_llvm_context *ctx,
+					  LLVMValueRef index,
+					  enum desc_type type)
+{
+	LLVMValueRef list = ctx->descriptor_sets[0];
+
+	return get_sampler_desc_custom(ctx, list, index, type);
+}
+
+static void set_tex_fetch_args(struct nir_to_llvm_context *ctx,
+			       struct ac_tex_info *tinfo,
+			       LLVMValueRef coord,
+			       unsigned count,
+			       unsigned dmask)
+{
+	int num_args;
+	unsigned is_rect = 0;
+
+	tinfo->args[0] = coord; /* texture coordinate */
+	tinfo->args[1] = get_sampler_desc_hack(ctx, ctx->i32zero, DESC_IMAGE);
+	num_args = 2;
+
+	tinfo->dst_type = ctx->v4f32;
+
+	tinfo->args[num_args++] = get_sampler_desc_hack(ctx, ctx->i32zero, DESC_SAMPLER);
+
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, dmask, 0);
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, is_rect, 0); /* unorm */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* r128 */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0);
+//TODO					tgsi_is_array_sampler(target)); /* da */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* glc */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* slc */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* tfe */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* lwe */
+
+	tinfo->arg_count = num_args;
+}
+
 static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 {
 	LLVMValueRef result = NULL;
+	LLVMTypeRef dst_type;
+	struct ac_tex_info tinfo = { 0 };
+	unsigned dmask = 0xf;
+	LLVMValueRef address[16];
+	LLVMValueRef coords[5];
+	int count = 0;
+	int num_coords = instr->coord_components;
 
 	result = to_integer(ctx, ctx->v4f32empty);
+
+	assert(instr->src[0].type == nir_tex_src_coord);
+	set_tex_fetch_args(ctx, &tinfo, get_src(ctx, instr->src[0].src), 0, dmask);
+
+	result = build_tex_intrinsic(ctx, instr, &tinfo);
+
 	if (result) {
 		assert(instr->dest.is_ssa);
 		_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
