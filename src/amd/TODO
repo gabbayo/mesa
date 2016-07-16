@@ -1,9 +1,10 @@
 
 fill out NIR->LLVM
+more formats
 Fast Clears
 MSAA
 HiZ
 DCC
 Geometry shaders
 Tessellation Shaders
-
+Compressed textures
