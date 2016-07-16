@@ -11,3 +11,5 @@ Compressed textures
 Resizing the IB's
 Compute & DMA queues
 Shader cache
+texture arrays
+push constants
