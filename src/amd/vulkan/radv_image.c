@@ -10,6 +10,11 @@ radv_choose_tiling(struct radv_device *Device,
    const struct vk_format_description *desc = vk_format_description(pCreateInfo->format);
    //   bool force_tiling = templ->flags & R600_RESOURCE_FLAG_FORCE_TILING;
 
+   if (pCreateInfo->tiling == VK_IMAGE_TILING_LINEAR) {
+      assert(pCreateInfo->samples <= 1);
+      return RADEON_SURF_MODE_LINEAR_ALIGNED;
+   }
+
    /* MSAA resources must be 2D tiled. */
    if (pCreateInfo->samples > 1)
       return RADEON_SURF_MODE_2D;
