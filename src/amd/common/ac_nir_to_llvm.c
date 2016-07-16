@@ -465,6 +465,19 @@ static LLVMValueRef emit_int_cmp(struct nir_to_llvm_context *ctx,
 	                       LLVMConstInt(ctx->i32, 0, false), "");
 }
 
+static LLVMValueRef emit_float_cmp(struct nir_to_llvm_context *ctx,
+                                   LLVMRealPredicate pred, LLVMValueRef src0,
+                                   LLVMValueRef src1)
+{
+	LLVMValueRef result;
+	src0 = to_float(ctx, src0);
+	src1 = to_float(ctx, src1);
+	result = LLVMBuildFCmp(ctx->builder, pred, src0, src1, "");
+	return LLVMBuildSelect(ctx->builder, result,
+	                       LLVMConstInt(ctx->i32, 0xFFFFFFFF, false),
+	                       LLVMConstInt(ctx->i32, 0, false), "");
+}
+
 static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 {
 	LLVMValueRef src[4], result = NULL;
@@ -516,6 +529,18 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 		break;
 	case nir_op_uge:
 		result = emit_int_cmp(ctx, LLVMIntUGE, src[0], src[1]);
+		break;
+	case nir_op_feq:
+		result = emit_float_cmp(ctx, LLVMRealOEQ, src[0], src[1]);
+		break;
+	case nir_op_fne:
+		result = emit_float_cmp(ctx, LLVMRealONE, src[0], src[1]);
+		break;
+	case nir_op_flt:
+		result = emit_float_cmp(ctx, LLVMRealOLT, src[0], src[1]);
+		break;
+	case nir_op_fge:
+		result = emit_float_cmp(ctx, LLVMRealOGE, src[0], src[1]);
 		break;
 	case nir_op_vec2:
 	case nir_op_vec3:
