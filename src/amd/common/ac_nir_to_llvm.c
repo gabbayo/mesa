@@ -714,6 +714,7 @@ static void visit_store_ssbo(struct nir_to_llvm_context *ctx,
 static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
                                       nir_intrinsic_instr *instr)
 {
+	const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
 	const char *load_name;
 	LLVMTypeRef data_type = ctx->f32;
 	if (instr->num_components > 1)
@@ -730,7 +731,7 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 
 	LLVMValueRef params[] = {
 	    get_src(ctx, instr->src[1]),     LLVMConstInt(ctx->i32, 0, false),
-	    get_src(ctx, instr->src[2]),     LLVMConstInt(ctx->i1, 0, false),
+	    info->num_srcs == 2 ? ctx->i32zero : get_src(ctx, instr->src[2]),     LLVMConstInt(ctx->i1, 0, false),
 	    LLVMConstInt(ctx->i1, 0, false),
 	};
 
