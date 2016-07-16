@@ -46,6 +46,7 @@ enum desc_type {
 };
 
 struct nir_to_llvm_context {
+	const struct ac_nir_compiler_options *options;
 	LLVMContextRef context;
 	LLVMModuleRef module;
 	LLVMBuilderRef builder;
@@ -1492,10 +1493,12 @@ static void ac_llvm_finalize_module(struct nir_to_llvm_context * ctx)
 }
 
 LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
-                                       struct nir_shader *nir)
+                                       struct nir_shader *nir,
+                                       const struct ac_nir_compiler_options *options)
 {
 	struct nir_to_llvm_context ctx = {};
 	struct nir_function *func;
+	ctx.options = options;
 	ctx.context = LLVMContextCreate();
 	ctx.module = LLVMModuleCreateWithNameInContext("shader", ctx.context);
 
@@ -1600,9 +1603,10 @@ out:
 void ac_compile_nir_shader(LLVMTargetMachineRef tm,
                            struct ac_shader_binary *binary,
                            struct ac_shader_config *config,
-                           struct nir_shader *nir)
+                           struct nir_shader *nir,
+                           const struct ac_nir_compiler_options *options)
 {
-	LLVMModuleRef llvm_module = ac_translate_nir_to_llvm(tm, nir);
+	LLVMModuleRef llvm_module = ac_translate_nir_to_llvm(tm, nir, options);
 	LLVMDumpModule(llvm_module);
 
 	memset(binary, 0, sizeof(*binary));

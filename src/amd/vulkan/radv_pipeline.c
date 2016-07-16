@@ -201,14 +201,18 @@ static void radv_shader_variant_destroy(struct radv_device *device,
 
 static
 struct radv_shader_variant *radv_shader_variant_create(struct radv_device *device,
-                                                       struct nir_shader *shader)
+                                                       struct nir_shader *shader,
+                                                       struct radv_pipeline_layout *layout)
 {
    struct radv_shader_variant *variant = calloc(1, sizeof(struct radv_shader_variant));
    if (!variant)
       return NULL;
 
+   struct ac_nir_compiler_options options = {0};
+   options.layout = layout;
    struct ac_shader_binary binary;
-   ac_compile_nir_shader(device->target_machine, &binary, &variant->config, shader);
+   ac_compile_nir_shader(device->target_machine, &binary, &variant->config,
+                         shader, &options);
 
    bool scratch_enabled = variant->config.scratch_bytes_per_wave > 0;
    unsigned vgpr_comp_cnt = 0;
@@ -598,7 +602,8 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 			   MESA_SHADER_VERTEX,
 			   pStages[MESA_SHADER_VERTEX]->pSpecializationInfo);
      pipeline->shaders[MESA_SHADER_VERTEX] = radv_shader_variant_create(device,
-									shader);
+									shader,
+									pipeline->layout);
      fprintf(stderr, "Assign VS %p to %p\n", pipeline->shaders[MESA_SHADER_VERTEX], pipeline);
      pipeline->active_stages |= mesa_to_vk_shader_stage(MESA_SHADER_VERTEX);
    }
@@ -609,7 +614,8 @@ radv_pipeline_init(struct radv_pipeline *pipeline,
 			   MESA_SHADER_FRAGMENT,
 			   pStages[MESA_SHADER_FRAGMENT]->pSpecializationInfo);
      pipeline->shaders[MESA_SHADER_FRAGMENT] = radv_shader_variant_create(device,
-									shader);
+									shader,
+									pipeline->layout);
      fprintf(stderr, "Assign FS %p to %p\n", pipeline->shaders[MESA_SHADER_FRAGMENT], pipeline);
      pipeline->active_stages |= mesa_to_vk_shader_stage(MESA_SHADER_FRAGMENT);
    }
@@ -761,7 +767,8 @@ static VkResult radv_compute_pipeline_create(
       pipeline->compute.block_size[i] = shader->info.cs.local_size[i];
 
    pipeline->shaders[MESA_SHADER_COMPUTE] = radv_shader_variant_create(device,
-                                                                       shader);
+                                                                       shader,
+								       pipeline->layout);
 
    ralloc_free(shader);
    *pPipeline = radv_pipeline_to_handle(pipeline);
