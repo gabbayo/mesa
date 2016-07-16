@@ -378,6 +378,23 @@ static LLVMValueRef trim_vector(struct nir_to_llvm_context *ctx,
 	return LLVMBuildShuffleVector(ctx->builder, value, value, swizzle, "");
 }
 
+static LLVMValueRef
+build_gather_values(struct nir_to_llvm_context *ctx,
+		    LLVMValueRef *values,
+		    unsigned value_count)
+{
+	LLVMTypeRef vec_type = LLVMVectorType(LLVMTypeOf(values[0]), value_count);
+	LLVMBuilderRef builder = ctx->builder;
+	LLVMValueRef vec = LLVMGetUndef(vec_type);
+	unsigned i;
+
+	for (i = 0; i < value_count; i++) {
+		LLVMValueRef index = LLVMConstInt(ctx->i32, i, false);
+		vec = LLVMBuildInsertElement(builder, vec, values[i], index, "");
+	}
+	return vec;
+}
+
 static LLVMTypeRef get_def_type(struct nir_to_llvm_context *ctx,
                                 nir_ssa_def *def)
 {
@@ -396,28 +413,42 @@ static LLVMValueRef get_src(struct nir_to_llvm_context *ctx, nir_src src)
 }
 
 static LLVMValueRef get_alu_src(struct nir_to_llvm_context *ctx,
-                                nir_alu_src src)
+                                nir_alu_src src,
+                                unsigned num_components)
 {
 	LLVMValueRef value = get_src(ctx, src.src);
 	bool need_swizzle = false;
 
 	assert(value);
 	LLVMTypeRef type = LLVMTypeOf(value);
-	unsigned num_components = LLVMGetTypeKind(type) == LLVMVectorTypeKind
+	unsigned src_components = LLVMGetTypeKind(type) == LLVMVectorTypeKind
 	                              ? LLVMGetVectorSize(type)
-	                              : 0;
-	for (unsigned i = 0; i < num_components; ++i)
+	                              : 1;
+
+	for (unsigned i = 0; i < num_components; ++i) {
+		assert(src.swizzle[i] < src_components);
 		if (src.swizzle[i] != i)
 			need_swizzle = true;
-	if (need_swizzle) {
+	}
+
+	if (need_swizzle || num_components != src_components) {
 		LLVMValueRef masks[] = {
 		    LLVMConstInt(ctx->i32, src.swizzle[0], false),
 		    LLVMConstInt(ctx->i32, src.swizzle[1], false),
 		    LLVMConstInt(ctx->i32, src.swizzle[2], false),
 		    LLVMConstInt(ctx->i32, src.swizzle[3], false)};
-		LLVMValueRef swizzle = LLVMConstVector(masks, num_components);
-		value = LLVMBuildShuffleVector(ctx->builder, value, value,
-		                               swizzle, "");
+
+		if (src_components > 1 && num_components == 1) {
+			value = LLVMBuildExtractElement(ctx->builder, value,
+			                                masks[0], "");
+		} else if (src_components == 1 && num_components > 1) {
+			LLVMValueRef values[] = {value, value, value, value};
+			value = build_gather_values(ctx, values, num_components);
+		} else {
+			LLVMValueRef swizzle = LLVMConstVector(masks, num_components);
+			value = LLVMBuildShuffleVector(ctx->builder, value, value,
+		                                       swizzle, "");
+		}
 	}
 	assert(!src.negate);
 	assert(!src.abs);
@@ -437,11 +468,22 @@ static LLVMValueRef emit_int_cmp(struct nir_to_llvm_context *ctx,
 static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 {
 	LLVMValueRef src[4], result = NULL;
+	unsigned num_components = instr->dest.dest.ssa.num_components;
+	unsigned src_components;
 
 	assert(nir_op_infos[instr->op].num_inputs <= ARRAY_SIZE(src));
+	switch (instr->op) {
+	case nir_op_vec2:
+	case nir_op_vec3:
+	case nir_op_vec4:
+		src_components = 1;
+		break;
+	default:
+		src_components = num_components;
+		break;
+	}
 	for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
-		src[i] = trim_vector(ctx, get_alu_src(ctx, instr->src[i]),
-		                     instr->dest.dest.ssa.num_components);
+		src[i] = get_alu_src(ctx, instr->src[i], src_components);
 
 	switch (instr->op) {
 	case nir_op_fmov:
@@ -474,6 +516,11 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 		break;
 	case nir_op_uge:
 		result = emit_int_cmp(ctx, LLVMIntUGE, src[0], src[1]);
+		break;
+	case nir_op_vec2:
+	case nir_op_vec3:
+	case nir_op_vec4:
+		result = build_gather_values(ctx, src, num_components);
 		break;
 	default:
 		fprintf(stderr, "Unknown NIR alu instr: ");
@@ -658,23 +705,6 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 
 	return LLVMBuildBitCast(ctx->builder, ret,
 	                        get_def_type(ctx, &instr->dest.ssa), "");
-}
-
-static LLVMValueRef
-build_gather_values(struct nir_to_llvm_context *ctx,
-		    LLVMValueRef *values,
-		    unsigned value_count)
-{
-	LLVMTypeRef vec_type = LLVMVectorType(LLVMTypeOf(values[0]), value_count);
-	LLVMBuilderRef builder = ctx->builder;
-	LLVMValueRef vec = LLVMGetUndef(vec_type);
-	unsigned i;
-
-	for (i = 0; i < value_count; i++) {
-		LLVMValueRef index = LLVMConstInt(ctx->i32, i, false);
-		vec = LLVMBuildInsertElement(builder, vec, values[i], index, "");
-	}
-	return vec;
 }
 
 static LLVMValueRef visit_load_var(struct nir_to_llvm_context *ctx,
