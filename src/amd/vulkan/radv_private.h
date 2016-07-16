@@ -58,8 +58,6 @@ typedef struct xcb_connection_t xcb_connection_t;
 typedef uint32_t xcb_visualid_t;
 typedef uint32_t xcb_window_t;
 
-struct anv_l3_config;
-
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_intel.h>
 #include <vulkan/vk_icd.h>
@@ -110,7 +108,7 @@ align_i32(int32_t v, int32_t a)
 
 /** Alignment must be a power of 2. */
 static inline bool
-anv_is_aligned(uintmax_t n, uintmax_t a)
+radv_is_aligned(uintmax_t n, uintmax_t a)
 {
    assert(a == (a & -a));
    return (n & (a - 1)) == 0;
@@ -124,7 +122,7 @@ radv_minify(uint32_t n, uint32_t levels)
       return MAX(n >> levels, 1);
 }
 static inline float
-anv_clamp_f(float f, float min, float max)
+radv_clamp_f(float f, float min, float max)
 {
    assert(min < max);
 
@@ -137,7 +135,7 @@ anv_clamp_f(float f, float min, float max)
 }
 
 static inline bool
-anv_clear_mask(uint32_t *inout_mask, uint32_t clear_mask)
+radv_clear_mask(uint32_t *inout_mask, uint32_t clear_mask)
 {
    if (*inout_mask & clear_mask) {
       *inout_mask &= ~clear_mask;
@@ -444,7 +442,6 @@ struct radv_queue {
 
 struct radv_pipeline_cache {
    struct radv_device *                          device;
-  //   struct anv_state_stream                      program_stream;
    pthread_mutex_t                              mutex;
 
    uint32_t                                     total_size;
@@ -862,18 +859,6 @@ struct radv_image {
    struct radv_bo *bo;
    VkDeviceSize offset;
    uint32_t dcc_offset;
-   /**
-    * Image subsurfaces
-    *
-    * For each foo, anv_image::foo_surface is valid if and only if
-    * anv_image::aspects has a foo aspect.
-    *
-    * The hardware requires that the depth buffer and stencil buffer be
-    * separate surfaces.  From Vulkan's perspective, though, depth and stencil
-    * reside in the same VkImage.  To satisfy both the hardware and Vulkan, we
-    * allocate the depth and stencil buffers as separate surfaces in the same
-    * bo.
-    */
    struct radeon_surf surface;
 };
 
@@ -924,12 +909,6 @@ VkResult radv_image_create(VkDevice _device,
                           const struct radv_image_create_info *info,
                           const VkAllocationCallbacks* alloc,
                           VkImage *pImage);
-#if 0
-
-struct anv_surface *
-anv_image_get_surface_for_aspect_mask(struct anv_image *image,
-                                      VkImageAspectFlags aspect_mask);
-#endif
 
 void radv_image_view_init(struct radv_image_view *view,
 			  struct radv_device *device,
@@ -942,25 +921,6 @@ struct radv_buffer_view {
    uint32_t offset; /**< Offset into bo. */
    uint64_t range; /**< VkBufferViewCreateInfo::range */
 };
-#if 0
-struct anv_buffer_view {
-   enum isl_format format; /**< VkBufferViewCreateInfo::format */
-   struct anv_bo *bo;
-   uint32_t offset; /**< Offset into bo. */
-   uint64_t range; /**< VkBufferViewCreateInfo::range */
-
-   struct anv_state surface_state;
-   struct anv_state storage_surface_state;
-
-   struct brw_image_param storage_image_param;
-};
-
-void anv_buffer_view_init(struct anv_buffer_view *view,
-                          struct anv_device *device,
-                          const VkBufferViewCreateInfo* pCreateInfo,
-                          struct anv_cmd_buffer *cmd_buffer);
-
-#endif
 
 static inline struct VkExtent3D
 radv_sanitize_image_extent(const VkImageType imageType,
