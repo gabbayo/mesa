@@ -745,6 +745,14 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 		result = ctx->workgroup_ids;
 		break;
 	}
+	case nir_intrinsic_load_base_vertex: {
+		result = ctx->base_vertex;
+		break;
+	}
+	case nir_intrinsic_load_vertex_id_zero_base: {
+		result = ctx->vertex_id;
+		break;
+	}
 	case nir_intrinsic_load_local_invocation_id: {
 		result = ctx->local_invocation_ids;
 		break;
