@@ -52,6 +52,7 @@ struct nir_to_llvm_context {
 	LLVMValueRef main_function;
 
 	struct hash_table *defs;
+	struct hash_table *phis;
 
 	LLVMValueRef descriptor_sets[4];
 	LLVMValueRef workgroup_ids;
@@ -410,6 +411,14 @@ static LLVMValueRef get_src(struct nir_to_llvm_context *ctx, nir_src src)
 	assert(src.is_ssa);
 	struct hash_entry *entry = _mesa_hash_table_search(ctx->defs, src.ssa);
 	return (LLVMValueRef)entry->data;
+}
+
+
+static LLVMBasicBlockRef get_block(struct nir_to_llvm_context *ctx,
+                                   struct nir_block *b)
+{
+	struct hash_entry *entry = _mesa_hash_table_search(ctx->defs, b);
+	return (LLVMBasicBlockRef)entry->data;
 }
 
 static LLVMValueRef get_alu_src(struct nir_to_llvm_context *ctx,
@@ -939,6 +948,38 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 	}
 }
 
+
+static void visit_phi(struct nir_to_llvm_context *ctx, nir_phi_instr *instr)
+{
+	LLVMTypeRef type = get_def_type(ctx, &instr->dest.ssa);
+	LLVMValueRef result = LLVMBuildPhi(ctx->builder, type, "");
+
+	_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
+	_mesa_hash_table_insert(ctx->phis, instr, result);
+}
+
+static void visit_post_phi(struct nir_to_llvm_context *ctx,
+                           nir_phi_instr *instr,
+                           LLVMValueRef llvm_phi)
+{
+	nir_phi_src *src;
+	nir_foreach_phi_src(src, instr) {
+		LLVMBasicBlockRef block = get_block(ctx, src->pred);
+		LLVMValueRef llvm_src = get_src(ctx, src->src);
+
+		LLVMAddIncoming(llvm_phi, &llvm_src, &block, 1);
+	}
+}
+
+static void phi_post_pass(struct nir_to_llvm_context *ctx)
+{
+	struct hash_entry *entry;
+	hash_table_foreach(ctx->phis, entry) {
+		visit_post_phi(ctx, (nir_phi_instr*)entry->key,
+		               (LLVMValueRef)entry->data);
+	}
+}
+
 static void visit_cf_list(struct nir_to_llvm_context *ctx,
                           struct exec_list *list);
 
@@ -960,6 +1001,9 @@ static void visit_block(struct nir_to_llvm_context *ctx, nir_block *block)
 		case nir_instr_type_tex:
 			visit_tex(ctx, nir_instr_as_tex(instr));
 			break;
+		case nir_instr_type_phi:
+			visit_phi(ctx, nir_instr_as_phi(instr));
+			break;
 		default:
 			fprintf(stderr, "Unknown NIR instr type: ");
 			nir_print_instr(instr, stderr);
@@ -967,6 +1011,8 @@ static void visit_block(struct nir_to_llvm_context *ctx, nir_block *block)
 			abort();
 		}
 	}
+
+	_mesa_hash_table_insert(ctx->defs, block, LLVMGetInsertBlock(ctx->builder));
 }
 
 static void visit_if(struct nir_to_llvm_context *ctx, nir_if *if_stmt)
@@ -1448,12 +1494,15 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 
 	ctx.defs = _mesa_hash_table_create(NULL, _mesa_hash_pointer,
 	                                   _mesa_key_pointer_equal);
+	ctx.phis = _mesa_hash_table_create(NULL, _mesa_hash_pointer,
+	                                   _mesa_key_pointer_equal);
 
 	func = (struct nir_function *)exec_list_get_head(&nir->functions);
 
 	setup_locals(&ctx, func);
 
 	visit_cf_list(&ctx, &func->impl->body);
+	phi_post_pass(&ctx);
 
 	handle_shader_outputs_post(&ctx, nir);
 	LLVMBuildRetVoid(ctx.builder);
@@ -1461,6 +1510,7 @@ LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
 	ac_llvm_finalize_module(&ctx);
 	free(ctx.locals);
 	ralloc_free(ctx.defs);
+	ralloc_free(ctx.phis);
 
 	return ctx.module;
 }
