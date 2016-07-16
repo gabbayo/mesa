@@ -813,7 +813,7 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 		result = ctx->base_vertex;
 		break;
 	}
-	case nir_intrinsic_load_vertex_id_zero_base: {
+	case nir_intrinsic_load_vertex_id: {
 		result = ctx->vertex_id;
 		break;
 	}
