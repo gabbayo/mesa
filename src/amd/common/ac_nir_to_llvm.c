@@ -512,14 +512,33 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 	case nir_op_imov:
 		result = src[0];
 		break;
+	case nir_op_fneg:
+	        src[0] = to_float(ctx, src[0]);
+		result = LLVMBuildFNeg(ctx->builder, src[0], "");
+		break;
 	case nir_op_iadd:
 		result = LLVMBuildAdd(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_fadd:
+		src[0] = to_float(ctx, src[0]);
+		src[1] = to_float(ctx, src[1]);
+		result = LLVMBuildFAdd(ctx->builder, src[0], src[1], "");
 		break;
 	case nir_op_isub:
 		result = LLVMBuildSub(ctx->builder, src[0], src[1], "");
 		break;
 	case nir_op_imul:
 		result = LLVMBuildMul(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_fmul:
+		src[0] = to_float(ctx, src[0]);
+		src[1] = to_float(ctx, src[1]);
+		result = LLVMBuildFMul(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_fdiv:
+		src[0] = to_float(ctx, src[0]);
+		src[1] = to_float(ctx, src[1]);
+		result = LLVMBuildFDiv(ctx->builder, src[0], src[1], "");
 		break;
 	case nir_op_seq:
 		result = emit_int_cmp(ctx, LLVMIntEQ, src[0], src[1]);
@@ -554,6 +573,8 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 	case nir_op_vec2:
 	case nir_op_vec3:
 	case nir_op_vec4:
+		for (unsigned i = 0; i < nir_op_infos[instr->op].num_inputs; i++)
+			src[i] = to_integer(ctx, src[i]);
 		result = build_gather_values(ctx, src, num_components);
 		break;
 	default:
