@@ -14,6 +14,10 @@
 static void radv_shader_variant_destroy(struct radv_device *device,
                                         struct radv_shader_variant *variant);
 
+static const struct nir_shader_compiler_options nir_options = {
+  .vertex_id_zero_based = true
+};
+
 VkResult radv_CreateShaderModule(
     VkDevice                                    _device,
     const VkShaderModuleCreateInfo*             pCreateInfo,
@@ -91,10 +95,7 @@ radv_shader_compile_to_nir(struct radv_device *device,
 #if 0
    const struct brw_compiler *compiler =
       device->instance->physicalDevice.compiler;
-   const nir_shader_compiler_options *nir_options =
-      compiler->glsl_compiler_options[stage].NirOptions;
 #endif
-   const nir_shader_compiler_options *nir_options = NULL;
    nir_shader *nir;
    nir_function *entry_point;
    if (module->nir) {
@@ -102,7 +103,7 @@ radv_shader_compile_to_nir(struct radv_device *device,
        * shader directly.  In that case, we just ignore the SPIR-V entirely
        * and just use the NIR shader */
       nir = module->nir;
-      nir->options = nir_options;
+      nir->options = &nir_options;
       nir_validate_shader(nir);
 
       assert(exec_list_length(&nir->functions) == 1);
@@ -129,7 +130,7 @@ radv_shader_compile_to_nir(struct radv_device *device,
 
       entry_point = spirv_to_nir(spirv, module->size / 4,
                                  spec_entries, num_spec_entries,
-                                 stage, entrypoint_name, nir_options);
+                                 stage, entrypoint_name, &nir_options);
       nir = entry_point->shader;
       assert(nir->stage == stage);
       nir_validate_shader(nir);
