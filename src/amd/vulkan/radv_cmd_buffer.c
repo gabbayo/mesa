@@ -310,7 +310,7 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_02823C_CB_SHADER_MASK, 0xf);
 
     radeon_set_context_reg(cmd_buffer->cs, R_028644_SPI_PS_INPUT_CNTL_0,
-			   S_028644_FLAT_SHADE(1));
+			   S_028644_FLAT_SHADE(0));
 }
 
 static void
