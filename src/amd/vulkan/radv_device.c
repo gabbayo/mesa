@@ -1241,14 +1241,14 @@ radv_initialise_color_surface(struct radv_device *device,
 			      struct radv_image_view *iview)
 {
     struct radv_color_buffer_info *cb = &framebuffer->attachments[index].cb;
-    struct vk_format_description *desc;
+    const struct vk_format_description *desc;
     int i;
     unsigned ntype, format, swap, endian;
     unsigned blend_clamp = 0, blend_bypass = 0;
     unsigned pitch_tile_max, slice_tile_max, tile_mode_index;
     uint64_t va;
-    struct radeon_surf *surf = &iview->image->surface;
-    struct radeon_surf_level *level_info = &surf->level[iview->base_mip];
+    const struct radeon_surf *surf = &iview->image->surface;
+    const struct radeon_surf_level *level_info = &surf->level[iview->base_mip];
     
     memset(cb, 0, sizeof(*cb));
 
@@ -1378,7 +1378,7 @@ radv_initialise_ds_surface(struct radv_device *device,
     unsigned level = iview->base_mip;
     unsigned format;
     uint64_t va, s_offs, z_offs;
-    struct radeon_surf_level *level_info = &iview->image->surface.level[level];
+    const struct radeon_surf_level *level_info = &iview->image->surface.level[level];
     memset(ds, 0, sizeof(*ds));
     switch (iview->vk_format) {
     case VK_FORMAT_D24_UNORM_S8_UINT:
