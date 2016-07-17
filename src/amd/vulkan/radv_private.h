@@ -644,6 +644,9 @@ struct radv_cmd_state {
     VkShaderStageFlags                           descriptors_dirty;
     struct radv_attachment_state *                attachments;
     VkRect2D                                     render_area;
+    struct radv_buffer *                         index_buffer;
+    uint32_t                                     index_type;
+    uint32_t                                     index_offset;
 };
 struct radv_cmd_pool {
    VkAllocationCallbacks                        alloc;

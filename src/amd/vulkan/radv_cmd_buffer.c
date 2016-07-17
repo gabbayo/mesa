@@ -515,6 +515,11 @@ radv_cmd_buffer_flush_state(struct radv_cmd_buffer *cmd_buffer)
     if (cmd_buffer->state.dirty & RADV_CMD_DIRTY_DYNAMIC_SCISSOR)
         radv_emit_scissor(cmd_buffer);
 
+    if (cmd_buffer->state.dirty & RADV_CMD_DIRTY_INDEX_BUFFER) {
+        radeon_emit(cmd_buffer->cs, PKT3(PKT3_INDEX_TYPE, 0, 0));
+        radeon_emit(cmd_buffer->cs, cmd_buffer->state.index_type);
+    }
+
     radeon_set_context_reg(cmd_buffer->cs, R_028B54_VGT_SHADER_STAGES_EN, 0);
     ia_multi_vgt_param = si_get_ia_multi_vgt_param(cmd_buffer);
     /* TODO CIK only */
@@ -687,6 +692,20 @@ void radv_CmdBindVertexBuffers(
       vb[firstBinding + i].offset = pOffsets[i];
       cmd_buffer->state.vb_dirty |= 1 << (firstBinding + i);
    }
+}
+
+void radv_CmdBindIndexBuffer(
+    VkCommandBuffer                             commandBuffer,
+    VkBuffer buffer,
+    VkDeviceSize offset,
+    VkIndexType indexType)
+{
+   RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+
+   cmd_buffer->state.index_buffer = radv_buffer_from_handle(buffer);
+   cmd_buffer->state.index_offset = offset;
+   cmd_buffer->state.index_type = indexType; /* vk matches hw */
+   cmd_buffer->state.dirty |= RADV_CMD_DIRTY_INDEX_BUFFER;
 }
 
 void radv_CmdBindDescriptorSets(
@@ -1060,7 +1079,25 @@ void radv_CmdDrawIndexed(
     uint32_t                                    firstInstance)
 {
     RADV_FROM_HANDLE(radv_cmd_buffer, cmd_buffer, commandBuffer);
+    int index_size = cmd_buffer->state.index_type ? 2 : 1;
+    uint32_t index_max_size = (cmd_buffer->state.index_buffer->size - cmd_buffer->state.index_buffer->offset) / index_size;
+    uint64_t index_va;
+
     radv_cmd_buffer_flush_state(cmd_buffer);
+
+    radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B130_SPI_SHADER_USER_DATA_VS_0 + 8 * 5, 2);
+    radeon_emit(cmd_buffer->cs, firstIndex);
+    radeon_emit(cmd_buffer->cs, firstInstance);
+    radeon_emit(cmd_buffer->cs, PKT3(PKT3_NUM_INSTANCES, 0, 0));
+    radeon_emit(cmd_buffer->cs, instanceCount);
+
+    index_va = cmd_buffer->device->ws->buffer_get_va(cmd_buffer->state.index_buffer->bo->bo);
+    radeon_emit(cmd_buffer->cs, PKT3(PKT3_DRAW_INDEX_2, 4, false));
+    radeon_emit(cmd_buffer->cs, index_max_size);
+    radeon_emit(cmd_buffer->cs, index_va);
+    radeon_emit(cmd_buffer->cs, (index_va >> 32UL) & 0xFF);
+    radeon_emit(cmd_buffer->cs, indexCount);
+    radeon_emit(cmd_buffer->cs, V_0287F0_DI_SRC_SEL_DMA);
 }
 
 void radv_CmdDrawIndirect(
