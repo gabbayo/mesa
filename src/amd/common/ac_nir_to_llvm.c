@@ -711,7 +711,7 @@ static void visit_store_ssbo(struct nir_to_llvm_context *ctx,
 	if (instr->num_components > 1)
 		data_type = LLVMVectorType(ctx->f32, instr->num_components);
 
-	if (instr->num_components == 4)
+	if (instr->num_components == 4 || instr->num_components == 3)
 		store_name = "llvm.amdgcn.buffer.store.v4f32";
 	else if (instr->num_components == 2)
 		store_name = "llvm.amdgcn.buffer.store.v2f32";
@@ -741,7 +741,7 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 	if (instr->num_components > 1)
 		data_type = LLVMVectorType(ctx->f32, instr->num_components);
 
-	if (instr->num_components == 4)
+	if (instr->num_components == 4 || instr->num_components == 3)
 		load_name = "llvm.amdgcn.buffer.load.v4f32";
 	else if (instr->num_components == 2)
 		load_name = "llvm.amdgcn.buffer.load.v2f32";
@@ -751,8 +751,10 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 		abort();
 
 	LLVMValueRef params[] = {
-	    get_src(ctx, instr->src[1]),     LLVMConstInt(ctx->i32, 0, false),
-	    info->num_srcs == 2 ? ctx->i32zero : get_src(ctx, instr->src[2]),     LLVMConstInt(ctx->i1, 0, false),
+	    get_src(ctx, instr->src[0]),
+	    LLVMConstInt(ctx->i32, 0, false),
+	    get_src(ctx, instr->src[1]),
+	    LLVMConstInt(ctx->i1, 0, false),
 	    LLVMConstInt(ctx->i1, 0, false),
 	};
 
