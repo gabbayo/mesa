@@ -504,7 +504,7 @@ static LLVMValueRef emit_intrin_2f_param(struct nir_to_llvm_context *ctx,
 		to_float(ctx, src0),
 		to_float(ctx, src1),
 	};
-	return emit_llvm_intrinsic(ctx, intrin, ctx->f32, params, 2, 0);
+	return emit_llvm_intrinsic(ctx, intrin, ctx->f32, params, 2, LLVMReadNoneAttribute);
 }
 
 static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
