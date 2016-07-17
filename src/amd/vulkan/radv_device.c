@@ -1045,6 +1045,12 @@ VkResult radv_WaitForFences(
    return VK_SUCCESS;
 }
 
+VkResult radv_ResetFences(VkDevice device,
+			  uint32_t fenceCount,
+			  const VkFence *pFences)
+{
+   return VK_SUCCESS;
+}
 
 
 // Queue semaphore functions
