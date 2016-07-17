@@ -117,6 +117,11 @@ struct si_shader_output_values
 	LLVMValueRef values[4];
 };
 
+static LLVMValueRef
+emit_llvm_intrinsic(struct nir_to_llvm_context *ctx, const char *name,
+                    LLVMTypeRef return_type, LLVMValueRef *params,
+                    unsigned param_count, LLVMAttribute attribs);
+
 static unsigned radeon_llvm_reg_index_soa(unsigned index, unsigned chan)
 {
 	return (index * 4) + chan;
@@ -491,6 +496,17 @@ static LLVMValueRef emit_float_cmp(struct nir_to_llvm_context *ctx,
 	                       LLVMConstInt(ctx->i32, 0, false), "");
 }
 
+static LLVMValueRef emit_intrin_2f_param(struct nir_to_llvm_context *ctx,
+				       const char *intrin,
+				       LLVMValueRef src0, LLVMValueRef src1)
+{
+	LLVMValueRef params[] = {
+		to_float(ctx, src0),
+		to_float(ctx, src1),
+	};
+	return emit_llvm_intrinsic(ctx, intrin, ctx->f32, params, 2, 0);
+}
+
 static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 {
 	LLVMValueRef src[4], result = NULL;
@@ -527,6 +543,11 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 		src[0] = to_float(ctx, src[0]);
 		src[1] = to_float(ctx, src[1]);
 		result = LLVMBuildFAdd(ctx->builder, src[0], src[1], "");
+		break;
+	case nir_op_fsub:
+		src[0] = to_float(ctx, src[0]);
+		src[1] = to_float(ctx, src[1]);
+		result = LLVMBuildFSub(ctx->builder, src[0], src[1], "");
 		break;
 	case nir_op_isub:
 		result = LLVMBuildSub(ctx->builder, src[0], src[1], "");
@@ -573,6 +594,15 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 		break;
 	case nir_op_fge:
 		result = emit_float_cmp(ctx, LLVMRealOGE, src[0], src[1]);
+		break;
+	case nir_op_fsqrt:
+		result = emit_intrin_2f_param(ctx, "llvm.sqrt.f32", src[0], src[1]);
+		break;
+	case nir_op_fmax:
+		result = emit_intrin_2f_param(ctx, "llvm.maxnum.f32", src[0], src[1]);
+		break;
+	case nir_op_fmin:
+		result = emit_intrin_2f_param(ctx, "llvm.minnum.f32", src[0], src[1]);
 		break;
 	case nir_op_vec2:
 	case nir_op_vec3:
