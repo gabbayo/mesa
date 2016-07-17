@@ -38,6 +38,7 @@ AM_CPPFLAGS = \
 	-DBRAHMA_BUILD=1
 
 AM_CFLAGS = -Wno-override-init -msse2 \
+	$(AMDGPU_CFLAGS) \
 	$(PTHREAD_CFLAGS) \
 	$(LLVM_CFLAGS) \
 	$(LIBELF_CFLAGS)

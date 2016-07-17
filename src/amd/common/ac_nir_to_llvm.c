@@ -25,7 +25,10 @@
 #include "ac_binary.h"
 #include "sid.h"
 #include "nir/nir.h"
+#include "../vulkan/radv_private.h"
+
 #include <llvm-c/Transforms/Scalar.h>
+
 enum radeon_llvm_calling_convention {
 	RADEON_LLVM_AMDGPU_VS = 87,
 	RADEON_LLVM_AMDGPU_GS = 88,
@@ -686,11 +689,13 @@ static LLVMValueRef visit_vulkan_resource_index(struct nir_to_llvm_context *ctx,
                                                 nir_intrinsic_instr *instr)
 {
 	LLVMValueRef index = get_src(ctx, instr->src[0]);
-	LLVMValueRef desc_ptr =
-	    ctx->descriptor_sets[nir_intrinsic_desc_set(instr)];
-	unsigned base_offset = nir_intrinsic_binding(instr) * 16 / 4;
+	unsigned desc_set = nir_intrinsic_desc_set(instr);
+	unsigned binding = nir_intrinsic_binding(instr);
+	LLVMValueRef desc_ptr = ctx->descriptor_sets[desc_set];
+	struct radv_descriptor_set_layout *layout = ctx->options->layout->set[desc_set].layout;
+	unsigned base_offset = layout->binding[binding].offset / 4;
 	LLVMValueRef offset = LLVMConstInt(ctx->i32, base_offset, false);
-	LLVMValueRef stride = LLVMConstInt(ctx->i32, 4, false);
+	LLVMValueRef stride = LLVMConstInt(ctx->i32, layout->binding[binding].size / 4, false);
 	index = LLVMBuildMul(ctx->builder, index, stride, "");
 	offset = LLVMBuildAdd(ctx->builder, offset, index, "");
 
