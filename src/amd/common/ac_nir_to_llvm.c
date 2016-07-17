@@ -881,61 +881,76 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 	}
 }
 
-static LLVMValueRef get_sampler_desc_custom(struct nir_to_llvm_context *ctx,
-					    LLVMValueRef list,
-					    LLVMValueRef index,
-					    enum desc_type type)
-{
-    LLVMBuilderRef builder = ctx->builder;
-    switch (type) {
-    case DESC_IMAGE:
-	/* The image is at [0:7]. */
-	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, 2, 0), "");
-	list = LLVMBuildPointerCast(builder, list,
-				    const_array(ctx->v8i32, 0), "");
-	break;
-    case DESC_FMASK:
-	/* The FMASK is at [8:15]. */
-	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, 2, 0), "");
-	index = LLVMBuildAdd(builder, index, LLVMConstInt(ctx->i32, 1, 0), "");
-	break;
-    case DESC_SAMPLER:
-	/* The sampler state is at [12:15]. */
-	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, 4, 0), "");
-	index = LLVMBuildAdd(builder, index, LLVMConstInt(ctx->i32, 3, 0), "");
-	list = LLVMBuildPointerCast(builder, list,
-				    const_array(ctx->v4i32, 0), "");
-	break;
-    }
-    return build_indexed_load_const(ctx, list, index);
-}
-
-/* dirty hack */
-static LLVMValueRef get_sampler_desc_hack(struct nir_to_llvm_context *ctx,
+static LLVMValueRef get_sampler_desc(struct nir_to_llvm_context *ctx,
+					  nir_deref_var *deref,
 					  LLVMValueRef index,
-					  enum desc_type type)
+					  enum desc_type desc_type)
 {
-	LLVMValueRef list = ctx->descriptor_sets[0];
+	unsigned desc_set = deref->var->data.descriptor_set;
+	LLVMValueRef list = ctx->descriptor_sets[desc_set];
+	struct radv_descriptor_set_layout *layout = ctx->options->layout->set[desc_set].layout;
+	struct radv_descriptor_set_binding_layout *binding = layout->binding + deref->var->data.binding;
+	unsigned offset = binding->offset;
+	unsigned stride = binding->size;
+	unsigned type_size;
+	LLVMBuilderRef builder = ctx->builder;
+	LLVMTypeRef type;
+	LLVMValueRef indices[2];
 
-	return get_sampler_desc_custom(ctx, list, index, type);
+	assert(deref->var->data.binding < layout->binding_count);
+
+	switch (desc_type) {
+	case DESC_IMAGE:
+		/* The image is at [0:7]. */
+		type = ctx->v8i32;
+		type_size = 32;
+		break;
+	case DESC_FMASK:
+		/* The FMASK is at [8:15]. */
+		type = ctx->v8i32;
+		offset += 32;
+		type_size = 32;
+		break;
+	case DESC_SAMPLER:
+		/* The sampler state is at [12:15]. */
+		type = ctx->v4i32;
+		if (binding->type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+			offset += 64;
+
+		type_size = 16;
+		break;
+	}
+
+	assert(stride % type_size == 0);
+
+	index = LLVMBuildMul(builder, index, LLVMConstInt(ctx->i32, stride / type_size, 0), "");
+	indices[0] = ctx->i32zero;
+	indices[1] = LLVMConstInt(ctx->i32, offset / 4, 0);
+	list = LLVMBuildGEP(builder, list, indices, 2, "");
+	list = LLVMBuildPointerCast(builder, list, const_array(type, 0), "");
+
+	return build_indexed_load_const(ctx, list, index);
 }
 
 static void set_tex_fetch_args(struct nir_to_llvm_context *ctx,
 			       struct ac_tex_info *tinfo,
-			       LLVMValueRef coord,
-			       unsigned count,
+			       nir_tex_instr *instr,
 			       unsigned dmask)
 {
 	int num_args;
 	unsigned is_rect = 0;
+	LLVMValueRef coord;
+
+	coord = get_src(ctx, instr->src[0].src);
+	coord = trim_vector(ctx, coord, instr->coord_components);
 
 	tinfo->args[0] = coord; /* texture coordinate */
-	tinfo->args[1] = get_sampler_desc_hack(ctx, ctx->i32zero, DESC_IMAGE);
+	tinfo->args[1] = get_sampler_desc(ctx, instr->texture, ctx->i32zero, DESC_IMAGE);
 	num_args = 2;
 
 	tinfo->dst_type = ctx->v4f32;
 
-	tinfo->args[num_args++] = get_sampler_desc_hack(ctx, ctx->i32zero, DESC_SAMPLER);
+	tinfo->args[num_args++] = get_sampler_desc(ctx, instr->sampler, ctx->i32zero, DESC_SAMPLER);
 
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, dmask, 0);
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, is_rect, 0); /* unorm */
@@ -957,18 +972,9 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 	struct ac_tex_info tinfo = { 0 };
 	unsigned dmask = 0xf;
 	LLVMValueRef address[16];
-	LLVMValueRef coords[5];
-	LLVMValueRef coord;
 	LLVMTypeRef data_type = ctx->i32;
-	int count = 0;
-	int num_coords = instr->coord_components;
 
-	result = to_integer(ctx, ctx->v4f32empty);
-
-	coord = get_src(ctx, instr->src[0].src);
-	coord = trim_vector(ctx, coord,
-			    instr->coord_components);
-	set_tex_fetch_args(ctx, &tinfo, coord, 0, dmask);
+	set_tex_fetch_args(ctx, &tinfo, instr, dmask);
 
 	result = build_tex_intrinsic(ctx, instr, &tinfo);
 
