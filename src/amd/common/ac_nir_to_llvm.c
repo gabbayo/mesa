@@ -496,6 +496,16 @@ static LLVMValueRef emit_float_cmp(struct nir_to_llvm_context *ctx,
 	                       LLVMConstInt(ctx->i32, 0, false), "");
 }
 
+static LLVMValueRef emit_intrin_1f_param(struct nir_to_llvm_context *ctx,
+					 const char *intrin,
+					 LLVMValueRef src0)
+{
+	LLVMValueRef params[] = {
+		to_float(ctx, src0),
+	};
+	return emit_llvm_intrinsic(ctx, intrin, ctx->f32, params, 1, LLVMReadNoneAttribute);
+}
+
 static LLVMValueRef emit_intrin_2f_param(struct nir_to_llvm_context *ctx,
 				       const char *intrin,
 				       LLVMValueRef src0, LLVMValueRef src1)
@@ -594,6 +604,9 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 		break;
 	case nir_op_fge:
 		result = emit_float_cmp(ctx, LLVMRealOGE, src[0], src[1]);
+		break;
+	case nir_op_fabs:
+		result = emit_intrin_1f_param(ctx, "llvm.fabs.f32", src[0]);
 		break;
 	case nir_op_fsqrt:
 		result = emit_intrin_2f_param(ctx, "llvm.sqrt.f32", src[0], src[1]);
