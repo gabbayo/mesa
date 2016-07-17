@@ -767,6 +767,9 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 	LLVMValueRef ret =
 	    emit_llvm_intrinsic(ctx, load_name, data_type, params, 5, 0);
 
+	if (instr->num_components == 3)
+		ret = trim_vector(ctx, ret, 3);
+
 	return LLVMBuildBitCast(ctx->builder, ret,
 	                        get_def_type(ctx, &instr->dest.ssa), "");
 }
