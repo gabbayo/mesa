@@ -51,13 +51,7 @@ VkResult radv_CreateDescriptorSetLayout(
    for (uint32_t j = 0; j < pCreateInfo->bindingCount; j++) {
       const VkDescriptorSetLayoutBinding *binding = &pCreateInfo->pBindings[j];
       uint32_t b = binding->binding;
-
-      assert(binding->descriptorCount > 0);
-      set_layout->binding[b].type = binding->descriptorType;
-      set_layout->binding[b].array_size = binding->descriptorCount;
-      set_layout->binding[b].offset = set_layout->size;
-      set_layout->binding[b].buffer_offset = buffer_count;
-      set_layout->binding[b].dynamic_offset_offset = dynamic_offset_count;
+      uint32_t alignment;
 
       switch (binding->descriptorType) {
       case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
@@ -70,21 +64,32 @@ VkResult radv_CreateDescriptorSetLayout(
       case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
          set_layout->binding[b].size = 16;
          set_layout->binding[b].buffer_count = 1;
+         alignment = 16;
          break;
       case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
       case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
          /* main descriptor + fmask descriptor */
          set_layout->binding[b].size = 64;
          set_layout->binding[b].buffer_count = 1;
+         alignment = 32;
          break;
       case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
          /* main descriptor + fmask descriptor + sampler */
-         set_layout->binding[b].size = 80;
+         set_layout->binding[b].size = 96;
          set_layout->binding[b].buffer_count = 1;
+         alignment = 32;
          break;
       default:
          break;
       }
+
+      set_layout->size = align(set_layout->size, alignment);
+      assert(binding->descriptorCount > 0);
+      set_layout->binding[b].type = binding->descriptorType;
+      set_layout->binding[b].array_size = binding->descriptorCount;
+      set_layout->binding[b].offset = set_layout->size;
+      set_layout->binding[b].buffer_offset = buffer_count;
+      set_layout->binding[b].dynamic_offset_offset = dynamic_offset_count;
 
       set_layout->size += binding->descriptorCount * set_layout->binding[b].size;
       buffer_count += binding->descriptorCount * set_layout->binding[b].buffer_count;
