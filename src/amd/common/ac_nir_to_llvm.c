@@ -848,7 +848,9 @@ static LLVMValueRef visit_load_buffer(struct nir_to_llvm_context *ctx,
 	const nir_intrinsic_info *info = &nir_intrinsic_infos[instr->intrinsic];
 	const char *load_name;
 	LLVMTypeRef data_type = ctx->f32;
-	if (instr->num_components > 1)
+	if (instr->num_components == 3)
+		data_type = LLVMVectorType(ctx->f32, 4);
+	else if (instr->num_components > 1)
 		data_type = LLVMVectorType(ctx->f32, instr->num_components);
 
 	if (instr->num_components == 4 || instr->num_components == 3)
