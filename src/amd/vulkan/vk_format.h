@@ -278,6 +278,20 @@ vk_format_has_stencil(const struct vk_format_description *desc)
    return desc->colorspace == VK_FORMAT_COLORSPACE_ZS &&
           desc->swizzle[1] != VK_SWIZZLE_NONE;
 }
+
+static inline bool
+vk_format_is_depth_or_stencil(VkFormat format)
+{
+   const struct vk_format_description *desc = vk_format_description(format);
+
+   assert(desc);
+   if (!desc) {
+      return false;
+   }
+
+   return vk_format_has_depth(desc) ||
+          vk_format_has_stencil(desc);
+}
 #ifdef __cplusplus
 } // extern "C" {
 #endif

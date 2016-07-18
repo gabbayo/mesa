@@ -263,12 +263,19 @@ radv_physical_device_get_format_properties(struct radv_physical_device *physical
                                           VkFormatProperties *out_properties)
 {
    VkFormatFeatureFlags linear = 0, tiled = 0, buffer = 0;
-   
-   if (radv_is_sampler_format_supported(physical_device, format)) {
-      linear |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+
+   if (vk_format_is_depth_or_stencil(format)) {
+     tiled |= VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+     tiled |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+     tiled |= VK_FORMAT_FEATURE_BLIT_SRC_BIT |
+       VK_FORMAT_FEATURE_BLIT_DST_BIT;
+   } else {
+     if (radv_is_sampler_format_supported(physical_device, format)) {
+       linear |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
 	 VK_FORMAT_FEATURE_BLIT_SRC_BIT;
-      tiled |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+       tiled |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
 	 VK_FORMAT_FEATURE_BLIT_SRC_BIT;
+     }
    }
    out_properties->linearTilingFeatures = linear;
    out_properties->optimalTilingFeatures = tiled;
