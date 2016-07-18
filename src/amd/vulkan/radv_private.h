@@ -417,7 +417,7 @@ struct radv_meta_state {
        * blit2d_src_type and blit2d_dst_type enums in radv_meta_blit2d.c to
        * see what these mean.
        */
-      VkPipeline pipelines[2][3];
+      VkPipeline pipelines[2];
    } blit2d;
 
    struct {

@@ -24,15 +24,6 @@
 #include "radv_meta.h"
 #include "nir/nir_builder.h"
 
-enum blit2d_src_type {
-   /* We can make a "normal" image view of this source and just texture
-    * from it like you would in any other shader.
-    */
-   BLIT2D_SRC_TYPE_NORMAL,
-
-   BLIT2D_NUM_SRC_TYPES,
-};
-
 enum blit2d_dst_type {
    /* We can bind this destination as a "normal" render target and render
     * to it just like you would anywhere else.
@@ -144,14 +135,13 @@ struct blit2d_src_temps {
 static void
 blit2d_bind_src(struct radv_cmd_buffer *cmd_buffer,
                 struct radv_meta_blit2d_surf *src,
-                enum blit2d_src_type src_type,
                 struct radv_meta_blit2d_rect *rect,
                 struct blit2d_src_temps *tmp)
 {
    struct radv_device *device = cmd_buffer->device;
    VkDevice vk_device = radv_device_to_handle(cmd_buffer->device);
 
-   if (src_type == BLIT2D_SRC_TYPE_NORMAL) {
+   {
       uint32_t offset = 0;
       create_iview(cmd_buffer, src, offset, VK_IMAGE_USAGE_SAMPLED_BIT,
                    rect->src_x + rect->width, rect->src_y + rect->height,
@@ -209,15 +199,12 @@ blit2d_bind_src(struct radv_cmd_buffer *cmd_buffer,
 
 static void
 blit2d_unbind_src(struct radv_cmd_buffer *cmd_buffer,
-                  enum blit2d_src_type src_type,
                   struct blit2d_src_temps *tmp)
 {
    radv_DestroyDescriptorPool(radv_device_to_handle(cmd_buffer->device),
                              tmp->desc_pool, &cmd_buffer->pool->alloc);
-   if (src_type == BLIT2D_SRC_TYPE_NORMAL) {
-      radv_DestroyImage(radv_device_to_handle(cmd_buffer->device),
-                       tmp->image, &cmd_buffer->pool->alloc);
-   }
+   radv_DestroyImage(radv_device_to_handle(cmd_buffer->device),
+		     tmp->image, &cmd_buffer->pool->alloc);
 }
 
 struct blit2d_dst_temps {
@@ -275,11 +262,10 @@ radv_meta_begin_blit2d(struct radv_cmd_buffer *cmd_buffer,
 
 static void
 bind_pipeline(struct radv_cmd_buffer *cmd_buffer,
-              enum blit2d_src_type src_type,
               enum blit2d_dst_type dst_type)
 {
    VkPipeline pipeline =
-      cmd_buffer->device->meta_state.blit2d.pipelines[src_type][dst_type];
+      cmd_buffer->device->meta_state.blit2d.pipelines[dst_type];
 
    if (cmd_buffer->state.pipeline != radv_pipeline_from_handle(pipeline)) {
       radv_CmdBindPipeline(radv_cmd_buffer_to_handle(cmd_buffer),
@@ -290,7 +276,6 @@ bind_pipeline(struct radv_cmd_buffer *cmd_buffer,
 static void
 radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
                            struct radv_meta_blit2d_surf *src,
-                           enum blit2d_src_type src_type,
                            struct radv_meta_blit2d_surf *dst,
                            unsigned num_rects,
                            struct radv_meta_blit2d_rect *rects)
@@ -299,7 +284,7 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
 
    for (unsigned r = 0; r < num_rects; ++r) {
       struct blit2d_src_temps src_temps;
-      blit2d_bind_src(cmd_buffer, src, src_type, &rects[r], &src_temps);
+      blit2d_bind_src(cmd_buffer, src, &rects[r], &src_temps);
 
       uint32_t offset = 0;
       struct blit2d_dst_temps dst_temps;
@@ -379,7 +364,7 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
             .pClearValues = NULL,
          }, VK_SUBPASS_CONTENTS_INLINE);
 
-      bind_pipeline(cmd_buffer, src_type, BLIT2D_DST_TYPE_NORMAL);
+      bind_pipeline(cmd_buffer, BLIT2D_DST_TYPE_NORMAL);
 
       RADV_CALL(CmdDraw)(radv_cmd_buffer_to_handle(cmd_buffer), 3, 1, 0, 0);
 
@@ -388,7 +373,7 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
       /* At the point where we emit the draw call, all data from the
        * descriptor sets, etc. has been used.  We are free to delete it.
        */
-      blit2d_unbind_src(cmd_buffer, src_type, &src_temps);
+      blit2d_unbind_src(cmd_buffer, &src_temps);
       blit2d_unbind_dst(cmd_buffer, &dst_temps);
    }
 }
@@ -400,15 +385,12 @@ radv_meta_blit2d(struct radv_cmd_buffer *cmd_buffer,
                 unsigned num_rects,
                 struct radv_meta_blit2d_rect *rects)
 {
-   enum blit2d_src_type src_type;
-   src_type = BLIT2D_SRC_TYPE_NORMAL;
-
    if (dst->bs % 3 == 0) {
       radv_finishme("Blitting to RGB destinations not yet supported");
       return;
    } else {
       assert(util_is_power_of_two(dst->bs));
-      radv_meta_blit2d_normal_dst(cmd_buffer, src, src_type, dst,
+      radv_meta_blit2d_normal_dst(cmd_buffer, src, dst,
                                  num_rects, rects);
    }
 }
@@ -556,32 +538,22 @@ radv_device_finish_meta_blit2d_state(struct radv_device *device)
                                      &device->meta_state.alloc);
    }
 
-   for (unsigned src = 0; src < BLIT2D_NUM_SRC_TYPES; src++) {
-      for (unsigned dst = 0; dst < BLIT2D_NUM_DST_TYPES; dst++) {
-         if (device->meta_state.blit2d.pipelines[src][dst]) {
-            radv_DestroyPipeline(radv_device_to_handle(device),
-                                device->meta_state.blit2d.pipelines[src][dst],
-                                &device->meta_state.alloc);
-         }
-      }
+   for (unsigned dst = 0; dst < BLIT2D_NUM_DST_TYPES; dst++) {
+     if (device->meta_state.blit2d.pipelines[dst]) {
+       radv_DestroyPipeline(radv_device_to_handle(device),
+			    device->meta_state.blit2d.pipelines[dst],
+			    &device->meta_state.alloc);
+     }
    }
 }
 
 static VkResult
 blit2d_init_pipeline(struct radv_device *device,
-                     enum blit2d_src_type src_type,
                      enum blit2d_dst_type dst_type)
 {
    VkResult result;
 
-   texel_fetch_build_func src_func;
-   switch (src_type) {
-   case BLIT2D_SRC_TYPE_NORMAL:
-      src_func = build_nir_texel_fetch;
-      break;
-   default:
-      unreachable("Invalid blit2d source type");
-   }
+   texel_fetch_build_func src_func = build_nir_texel_fetch;
 
    const VkPipelineVertexInputStateCreateInfo *vi_create_info;
    struct radv_shader_module fs = { .nir = NULL };
@@ -684,7 +656,7 @@ blit2d_init_pipeline(struct radv_device *device,
       VK_NULL_HANDLE,
       &vk_pipeline_info, &radv_pipeline_info,
       &device->meta_state.alloc,
-      &device->meta_state.blit2d.pipelines[src_type][dst_type]);
+      &device->meta_state.blit2d.pipelines[dst_type]);
 
    ralloc_free(vs.nir);
    ralloc_free(fs.nir);
@@ -759,12 +731,10 @@ radv_device_init_meta_blit2d_state(struct radv_device *device)
    if (result != VK_SUCCESS)
       goto fail;
 
-   for (unsigned src = 0; src < BLIT2D_NUM_SRC_TYPES; src++) {
-      for (unsigned dst = 0; dst < 1; /*BLIT2D_NUM_DST_TYPES;*/ dst++) {
-         result = blit2d_init_pipeline(device, src, dst);
-         if (result != VK_SUCCESS)
-            goto fail;
-      }
+   for (unsigned dst = 0; dst < 1; /*BLIT2D_NUM_DST_TYPES;*/ dst++) {
+     result = blit2d_init_pipeline(device, dst);
+     if (result != VK_SUCCESS)
+       goto fail;
    }
 
    return VK_SUCCESS;
