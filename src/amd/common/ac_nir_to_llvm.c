@@ -1322,6 +1322,7 @@ handle_fs_input_decl(struct nir_to_llvm_context *ctx,
 	int idx = ctx->num_inputs++;
 	LLVMValueRef interp_param = NULL;
 
+	variable->data.driver_location = idx;
 	interp_param = lookup_interp_param(ctx, variable->data.interpolation, 0);
 
 	interp_fs_input(ctx, variable, idx, interp_param, ctx->prim_mask,
