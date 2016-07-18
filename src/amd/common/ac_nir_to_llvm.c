@@ -624,6 +624,20 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 			src[i] = to_integer(ctx, src[i]);
 		result = build_gather_values(ctx, src, num_components);
 		break;
+	case nir_op_f2i:
+		src[0] = to_float(ctx, src[0]);
+		result = LLVMBuildFPToSI(ctx->builder, src[0], ctx->i32, "");
+		break;
+	case nir_op_f2u:
+		src[0] = to_float(ctx, src[0]);
+		result = LLVMBuildFPToUI(ctx->builder, src[0], ctx->i32, "");
+		break;
+	case nir_op_i2f:
+		result = LLVMBuildSIToFP(ctx->builder, src[0], ctx->f32, "");
+		break;
+	case nir_op_u2f:
+		result = LLVMBuildUIToFP(ctx->builder, src[0], ctx->f32, "");
+		break;
 	default:
 		fprintf(stderr, "Unknown NIR alu instr: ");
 		nir_print_instr(&instr->instr, stderr);
