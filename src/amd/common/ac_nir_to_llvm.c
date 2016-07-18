@@ -367,13 +367,18 @@ static void setup_types(struct nir_to_llvm_context *ctx)
 	ctx->empty_md = LLVMMDNodeInContext(ctx->context, NULL, 0);
 }
 
-static LLVMValueRef trim_vector(struct nir_to_llvm_context *ctx,
-                                LLVMValueRef value, unsigned count)
+static int get_llvm_num_components(LLVMValueRef value)
 {
 	LLVMTypeRef type = LLVMTypeOf(value);
 	unsigned num_components = LLVMGetTypeKind(type) == LLVMVectorTypeKind
 	                              ? LLVMGetVectorSize(type)
 	                              : 1;
+	return num_components;
+}
+static LLVMValueRef trim_vector(struct nir_to_llvm_context *ctx,
+                                LLVMValueRef value, unsigned count)
+{
+	unsigned num_components = get_llvm_num_components(value);
 	if (count == num_components)
 		return value;
 
@@ -399,6 +404,8 @@ build_gather_values(struct nir_to_llvm_context *ctx,
 	LLVMValueRef vec = LLVMGetUndef(vec_type);
 	unsigned i;
 
+	if (value_count == 1)
+		return values[0];
 	for (i = 0; i < value_count; i++) {
 		LLVMValueRef index = LLVMConstInt(ctx->i32, i, false);
 		vec = LLVMBuildInsertElement(builder, vec, values[i], index, "");
@@ -858,12 +865,13 @@ static LLVMValueRef visit_load_var(struct nir_to_llvm_context *ctx,
 {
 	LLVMValueRef values[4];
 	int idx = instr->variables[0]->var->data.driver_location;
+	int ve = glsl_get_vector_elements(instr->variables[0]->var->type);
 	switch (instr->variables[0]->var->data.mode) {
 	case nir_var_shader_in:
-		for (unsigned chan = 0; chan < 4; chan++) {
+		for (unsigned chan = 0; chan < ve; chan++) {
 			values[chan] = ctx->inputs[radeon_llvm_reg_index_soa(idx, chan)];
 		}
-		return to_integer(ctx, build_gather_values(ctx, values, 4));
+		return to_integer(ctx, build_gather_values(ctx, values, ve));
 		break;
 	case nir_var_local:
 		for (unsigned chan = 0; chan < 4; chan++) {
@@ -900,7 +908,10 @@ visit_store_var(struct nir_to_llvm_context *ctx,
 			if (writemask & (1 << chan)) {
 				temp_ptr = ctx->locals[radeon_llvm_reg_index_soa(idx, chan)];
 
-				value = LLVMBuildExtractElement(ctx->builder, src, LLVMConstInt(ctx->i32, chan, false), "");
+				if (get_llvm_num_components(src) == 1)
+					value = src;
+				else
+					value = LLVMBuildExtractElement(ctx->builder, src, LLVMConstInt(ctx->i32, chan, false), "");
 				LLVMBuildStore(ctx->builder, value, temp_ptr);
 			}
 		}
