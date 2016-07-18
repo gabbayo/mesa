@@ -233,7 +233,6 @@ blit2d_bind_src(struct radv_cmd_buffer *cmd_buffer,
          .offset = src->base_offset + tile_offset,
       };
 
-#if 0
       radv_buffer_view_init(&tmp->bview, device,
          &(VkBufferViewCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
@@ -242,7 +241,6 @@ blit2d_bind_src(struct radv_cmd_buffer *cmd_buffer,
             .offset = 0,
             .range = VK_WHOLE_SIZE,
          }, cmd_buffer);
-#endif
       radv_CreateDescriptorPool(vk_device,
          &(const VkDescriptorPoolCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -398,14 +396,9 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
       struct blit_vb_data {
          float pos[2];
          float tex_coord[3];
-      } *vb_data;
-#if 0
-      unsigned vb_size = sizeof(struct radv_vue_header) + 3 * sizeof(*vb_data);
+      } vb_data[3];
 
-      struct radv_state vb_state =
-         radv_cmd_buffer_alloc_dynamic_state(cmd_buffer, vb_size, 16);
-      memset(vb_state.map, 0, sizeof(struct radv_vue_header));
-      vb_data = vb_state.map + sizeof(struct radv_vue_header);
+      unsigned vb_size = 3 * sizeof(*vb_data);
 
       vb_data[0] = (struct blit_vb_data) {
          .pos = {
@@ -443,25 +436,21 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
          },
       };
 
-      if (!device->info.has_llc)
-         radv_state_clflush(vb_state);
+      radv_cmd_buffer_upload_data(cmd_buffer, vb_size, 16, vb_data, &offset);
 
       struct radv_buffer vertex_buffer = {
          .device = device,
          .size = vb_size,
-         .bo = &device->dynamic_state_block_pool.bo,
-         .offset = vb_state.offset,
+         .bo = &cmd_buffer->upload.upload_bo,
+         .offset = offset,
       };
-#endif
-      struct radv_buffer vertex_buffer;
-      radv_CmdBindVertexBuffers(radv_cmd_buffer_to_handle(cmd_buffer), 0, 2,
+
+      radv_CmdBindVertexBuffers(radv_cmd_buffer_to_handle(cmd_buffer), 0, 1,
          (VkBuffer[]) {
             radv_buffer_to_handle(&vertex_buffer),
-            radv_buffer_to_handle(&vertex_buffer)
          },
          (VkDeviceSize[]) {
-            0,
-	      0,//sizeof(struct radv_vue_header),
+	      0,
          });
 
       RADV_CALL(CmdBeginRenderPass)(radv_cmd_buffer_to_handle(cmd_buffer),
@@ -530,7 +519,7 @@ build_nir_vertex_shader(void)
 
    nir_variable *tex_pos_in = nir_variable_create(b.shader, nir_var_shader_in,
                                                   vec4, "a_tex_pos");
-   tex_pos_in->data.location = VERT_ATTRIB_GENERIC1;
+   tex_pos_in->data.location = VERT_ATTRIB_GENERIC0;
    nir_variable *tex_pos_out = nir_variable_create(b.shader, nir_var_shader_out,
                                                    vec4, "v_tex_pos");
    tex_pos_out->data.location = VARYING_SLOT_VAR0;
@@ -539,7 +528,7 @@ build_nir_vertex_shader(void)
 
    nir_variable *other_in = nir_variable_create(b.shader, nir_var_shader_in,
                                                 vec4, "a_other");
-   other_in->data.location = VERT_ATTRIB_GENERIC2;
+   other_in->data.location = VERT_ATTRIB_GENERIC1;
    nir_variable *other_out = nir_variable_create(b.shader, nir_var_shader_out,
                                                    vec4, "v_other");
    other_out->data.location = VARYING_SLOT_VAR1;
@@ -585,39 +574,27 @@ build_nir_texel_fetch(struct nir_builder *b, struct radv_device *device,
 
 static const VkPipelineVertexInputStateCreateInfo normal_vi_create_info = {
    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-   .vertexBindingDescriptionCount = 2,
+   .vertexBindingDescriptionCount = 1,
    .pVertexBindingDescriptions = (VkVertexInputBindingDescription[]) {
       {
          .binding = 0,
-         .stride = 0,
-         .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE
-      },
-      {
-         .binding = 1,
          .stride = 5 * sizeof(float),
          .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
       },
    },
-   .vertexAttributeDescriptionCount = 3,
+   .vertexAttributeDescriptionCount = 2,
    .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) {
       {
-         /* VUE Header */
+         /* Position */
          .location = 0,
          .binding = 0,
-         .format = VK_FORMAT_R32G32B32A32_UINT,
-         .offset = 0
-      },
-      {
-         /* Position */
-         .location = 1,
-         .binding = 1,
          .format = VK_FORMAT_R32G32_SFLOAT,
          .offset = 0
       },
       {
          /* Texture Coordinate */
-         .location = 2,
-         .binding = 1,
+         .location = 1,
+         .binding = 0,
          .format = VK_FORMAT_R32G32B32_SFLOAT,
          .offset = 8
       },
@@ -727,11 +704,6 @@ blit2d_init_pipeline(struct radv_device *device,
       return VK_SUCCESS;
    }
 
-   /* We don't use a vertex shader for blitting, but instead build and pass
-    * the VUEs directly to the rasterization backend.  However, we do need
-    * to provide GLSL source for the vertex shader so that the compiler
-    * does not dead-code our inputs.
-    */
    struct radv_shader_module vs = {
       .nir = build_nir_vertex_shader(),
    };
