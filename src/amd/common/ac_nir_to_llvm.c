@@ -63,8 +63,12 @@ struct nir_to_llvm_context {
 	LLVMValueRef local_invocation_ids;
 
 	LLVMValueRef vertex_buffers;
-	LLVMValueRef vertex_id;
 	LLVMValueRef base_vertex;
+	LLVMValueRef start_instance;
+	LLVMValueRef vertex_id;
+	LLVMValueRef rel_auto_id;
+	LLVMValueRef vs_prim_id;
+	LLVMValueRef instance_id;
 
 	LLVMValueRef alpha_ref;
 	LLVMValueRef prim_mask;
@@ -271,8 +275,12 @@ static void create_function(struct nir_to_llvm_context *ctx,
 	case MESA_SHADER_VERTEX:
 		arg_types[arg_idx++] = const_array(ctx->v16i8, 16);
 		arg_types[arg_idx++] = ctx->i32; // base vertex
+		arg_types[arg_idx++] = ctx->i32; // start instance
 		sgpr_count = arg_idx;
-		arg_types[arg_idx++] = ctx->i32;
+		arg_types[arg_idx++] = ctx->i32; // vertex id
+		arg_types[arg_idx++] = ctx->i32; // rel auto id
+		arg_types[arg_idx++] = ctx->i32; // vs prim id
+		arg_types[arg_idx++] = ctx->i32; // instance id
 		break;
 	case MESA_SHADER_FRAGMENT:
 		arg_types[arg_idx++] = ctx->f32; /* alpha ref */
@@ -311,7 +319,11 @@ static void create_function(struct nir_to_llvm_context *ctx,
 	case MESA_SHADER_VERTEX:
 		ctx->vertex_buffers = LLVMGetParam(ctx->main_function, arg_idx++);
 		ctx->base_vertex = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->start_instance = LLVMGetParam(ctx->main_function, arg_idx++);
 		ctx->vertex_id = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->rel_auto_id = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->vs_prim_id = LLVMGetParam(ctx->main_function, arg_idx++);
+		ctx->instance_id = LLVMGetParam(ctx->main_function, arg_idx++);
 		break;
 	case MESA_SHADER_FRAGMENT:
 		ctx->alpha_ref = LLVMGetParam(ctx->main_function, arg_idx++);
@@ -944,6 +956,12 @@ static void visit_intrinsic(struct nir_to_llvm_context *ctx,
 		result = ctx->local_invocation_ids;
 		break;
 	}
+	case nir_intrinsic_load_base_instance:
+		result = ctx->start_instance;
+		break;
+	case nir_intrinsic_load_instance_id:
+		result = ctx->instance_id;
+		break;
 	case nir_intrinsic_vulkan_resource_index:
 		result = visit_vulkan_resource_index(ctx, instr);
 		break;
