@@ -25,7 +25,7 @@
 #include "ac_binary.h"
 #include "sid.h"
 #include "nir/nir.h"
-#include "../vulkan/radv_private.h"
+#include "../vulkan/radv_descriptor_set.h"
 
 #include <llvm-c/Transforms/Scalar.h>
 
