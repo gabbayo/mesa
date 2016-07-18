@@ -746,6 +746,9 @@ static LLVMValueRef build_tex_intrinsic(struct nir_to_llvm_context *ctx,
 			"llvm.SI.image.load" :
 			"llvm.SI.image.load.mip";
 		break;
+	case nir_texop_txb:
+		infix = ".b";
+		break;
 	default:
 		break;
 	}
@@ -1023,8 +1026,8 @@ static void set_tex_fetch_args(struct nir_to_llvm_context *ctx,
 	coord = get_src(ctx, instr->src[0].src);
 	coord = trim_vector(ctx, coord, instr->coord_components);
 
-	if (instr->op == nir_texop_txf) {
-		LLVMValueRef values[3];
+	if (instr->op == nir_texop_txf || instr->op == nir_texop_txb) {
+		LLVMValueRef values[4];
 		LLVMValueRef lod = get_src(ctx, instr->src[1].src);
 		/* put LOD in */
 		LLVMValueRef masks[] = {
