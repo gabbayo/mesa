@@ -35,10 +35,6 @@ struct ac_nir_compiler_options {
 	struct radv_pipeline_layout *layout;
 };
 
-LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
-                                       struct nir_shader *nir,
-                                       const struct ac_nir_compiler_options *options);
-
 void ac_compile_nir_shader(LLVMTargetMachineRef tm,
                            struct ac_shader_binary *binary,
                            struct ac_shader_config *config,

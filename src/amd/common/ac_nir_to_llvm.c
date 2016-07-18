@@ -1639,6 +1639,7 @@ static void ac_llvm_finalize_module(struct nir_to_llvm_context * ctx)
 	LLVMDisposePassManager(passmgr);
 }
 
+static
 LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
                                        struct nir_shader *nir,
                                        const struct ac_nir_compiler_options *options)
