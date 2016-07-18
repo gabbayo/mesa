@@ -706,6 +706,7 @@ void radv_CmdBindIndexBuffer(
    cmd_buffer->state.index_offset = offset;
    cmd_buffer->state.index_type = indexType; /* vk matches hw */
    cmd_buffer->state.dirty |= RADV_CMD_DIRTY_INDEX_BUFFER;
+   cmd_buffer->device->ws->cs_add_buffer(cmd_buffer->cs, cmd_buffer->state.index_buffer->bo->bo, 8);
 }
 
 void radv_CmdBindDescriptorSets(
