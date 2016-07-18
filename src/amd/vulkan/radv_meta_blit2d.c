@@ -293,7 +293,7 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
 
       struct blit_vb_data {
          float pos[2];
-         float tex_coord[3];
+         float tex_coord[2];
       } vb_data[3];
 
       unsigned vb_size = 3 * sizeof(*vb_data);
@@ -306,7 +306,6 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
          .tex_coord = {
             rects[r].src_x,
             rects[r].src_y,
-            src->pitch,
          },
       };
 
@@ -318,7 +317,6 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
          .tex_coord = {
             rects[r].src_x,
             rects[r].src_y + rects[r].height,
-            src->pitch,
          },
       };
 
@@ -330,7 +328,6 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
          .tex_coord = {
             rects[r].src_x + rects[r].width,
             rects[r].src_y,
-            src->pitch,
          },
       };
 
@@ -426,11 +423,11 @@ build_nir_vertex_shader(void)
 
 typedef nir_ssa_def* (*texel_fetch_build_func)(struct nir_builder *,
                                                struct radv_device *,
-                                               nir_ssa_def *, nir_ssa_def *);
+                                               nir_ssa_def *);
 
 static nir_ssa_def *
 build_nir_texel_fetch(struct nir_builder *b, struct radv_device *device,
-                      nir_ssa_def *tex_pos, nir_ssa_def *tex_pitch)
+                      nir_ssa_def *tex_pos)
 {
    const struct glsl_type *sampler_type =
       glsl_sampler_type(GLSL_SAMPLER_DIM_2D, false, false, GLSL_TYPE_FLOAT);
@@ -464,7 +461,7 @@ static const VkPipelineVertexInputStateCreateInfo normal_vi_create_info = {
    .pVertexBindingDescriptions = (VkVertexInputBindingDescription[]) {
       {
          .binding = 0,
-         .stride = 5 * sizeof(float),
+         .stride = 4 * sizeof(float),
          .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
       },
    },
@@ -481,7 +478,7 @@ static const VkPipelineVertexInputStateCreateInfo normal_vi_create_info = {
          /* Texture Coordinate */
          .location = 1,
          .binding = 0,
-         .format = VK_FORMAT_R32G32B32_SFLOAT,
+         .format = VK_FORMAT_R32G32_SFLOAT,
          .offset = 8
       },
    },
@@ -509,9 +506,8 @@ build_nir_copy_fragment_shader(struct radv_device *device,
    nir_ssa_def *pos_int = nir_f2i(&b, nir_load_var(&b, tex_pos_in));
    unsigned swiz[4] = { 0, 1 };
    nir_ssa_def *tex_pos = nir_swizzle(&b, pos_int, swiz, 2, false);
-   nir_ssa_def *tex_pitch = nir_channel(&b, pos_int, 2);
 
-   nir_ssa_def *color = txf_func(&b, device, tex_pos, tex_pitch);
+   nir_ssa_def *color = txf_func(&b, device, tex_pos);
    nir_store_var(&b, color_out, color, 0xf);
 
    return b.shader;
