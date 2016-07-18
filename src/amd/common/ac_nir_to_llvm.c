@@ -109,6 +109,7 @@ struct nir_to_llvm_context {
 struct ac_tex_info {
 	LLVMValueRef args[12];
 	int arg_count;
+	int coord_components;
 	LLVMTypeRef dst_type;
 };
 
@@ -745,8 +746,8 @@ static LLVMValueRef build_tex_intrinsic(struct nir_to_llvm_context *ctx,
 		break;
 	}
 
-	if (instr->coord_components > 1)
-		snprintf(type, 6, "v%ui32", instr->coord_components);
+	if (tinfo->coord_components > 1)
+		snprintf(type, 6, "v%ui32", tinfo->coord_components);
 	else
 		strcpy(type, "i32");
 	sprintf(intr_name, "%s%s.%s", name, infix, type);
@@ -1017,6 +1018,22 @@ static void set_tex_fetch_args(struct nir_to_llvm_context *ctx,
 
 	coord = get_src(ctx, instr->src[0].src);
 	coord = trim_vector(ctx, coord, instr->coord_components);
+
+	if (instr->op == nir_texop_txf) {
+		LLVMValueRef values[3];
+		LLVMValueRef lod = get_src(ctx, instr->src[1].src);
+		/* put LOD in */
+		LLVMValueRef masks[] = {
+			LLVMConstInt(ctx->i32, 0, false), LLVMConstInt(ctx->i32, 1, false),
+		};
+		values[0] = LLVMBuildExtractElement(ctx->builder, coord, masks[0], "");
+		values[1] = LLVMBuildExtractElement(ctx->builder, coord, masks[1], "");
+		values[2] = lod;
+		values[3] = LLVMGetUndef(ctx->i32);
+		coord = build_gather_values(ctx, values, 4);
+		tinfo->coord_components = 4;
+        } else
+		tinfo->coord_components = instr->coord_components;
 
 	tinfo->args[0] = coord; /* texture coordinate */
 	tinfo->args[1] = get_sampler_desc(ctx, instr->texture, ctx->i32zero, DESC_IMAGE);
