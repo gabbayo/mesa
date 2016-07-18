@@ -50,6 +50,8 @@ enum desc_type {
 
 struct nir_to_llvm_context {
 	const struct ac_nir_compiler_options *options;
+	struct ac_shader_variant_info *shader_info;
+
 	LLVMContextRef context;
 	LLVMModuleRef module;
 	LLVMBuilderRef builder;
@@ -1367,6 +1369,11 @@ handle_fs_input_decl(struct nir_to_llvm_context *ctx,
 
 	interp_fs_input(ctx, variable, idx, interp_param, ctx->prim_mask,
 			&ctx->inputs[radeon_llvm_reg_index_soa(idx, 0)]);
+
+	if (!interp_param)
+		ctx->shader_info->fs.flat_shaded_mask |=
+		                           1u << ctx->shader_info->fs.num_interp;
+	++ctx->shader_info->fs.num_interp;
 }
 
 static void
@@ -1562,6 +1569,8 @@ handle_vs_outputs_post(struct nir_to_llvm_context *ctx,
 				    LLVMVoidTypeInContext(ctx->context),
 				    pos_args[i], 9, 0);
 	}
+
+	ctx->shader_info->vs.param_exports = param_count;
 }
 
 static void
@@ -1644,13 +1653,17 @@ static void ac_llvm_finalize_module(struct nir_to_llvm_context * ctx)
 static
 LLVMModuleRef ac_translate_nir_to_llvm(LLVMTargetMachineRef tm,
                                        struct nir_shader *nir,
+                                       struct ac_shader_variant_info *shader_info,
                                        const struct ac_nir_compiler_options *options)
 {
 	struct nir_to_llvm_context ctx = {};
 	struct nir_function *func;
 	ctx.options = options;
+	ctx.shader_info = shader_info;
 	ctx.context = LLVMContextCreate();
 	ctx.module = LLVMModuleCreateWithNameInContext("shader", ctx.context);
+
+	memset(shader_info, 0, sizeof(*shader_info));
 
 	LLVMSetTarget(ctx.module, "amdgcn--");
 	setup_types(&ctx);
@@ -1753,10 +1766,12 @@ out:
 void ac_compile_nir_shader(LLVMTargetMachineRef tm,
                            struct ac_shader_binary *binary,
                            struct ac_shader_config *config,
+                           struct ac_shader_variant_info *shader_info,
                            struct nir_shader *nir,
                            const struct ac_nir_compiler_options *options)
 {
-	LLVMModuleRef llvm_module = ac_translate_nir_to_llvm(tm, nir, options);
+	LLVMModuleRef llvm_module = ac_translate_nir_to_llvm(tm, nir, shader_info,
+	                                                     options);
 	LLVMDumpModule(llvm_module);
 
 	memset(binary, 0, sizeof(*binary));

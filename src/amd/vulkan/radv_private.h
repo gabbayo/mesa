@@ -48,6 +48,7 @@
 #include "main/macros.h"
 #include "radv_radeon_winsys.h"
 #include "ac_binary.h"
+#include "ac_nir_to_llvm.h"
 #include "radv_descriptor_set.h"
 
 #include <llvm-c/TargetMachine.h>
@@ -686,6 +687,7 @@ mesa_to_vk_shader_stage(gl_shader_stage mesa_stage)
 struct radv_shader_variant {
    struct radeon_winsys_bo *bo;
    struct ac_shader_config config;
+   struct ac_shader_variant_info info;
    unsigned rsrc1;
    unsigned rsrc2;
 };

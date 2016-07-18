@@ -35,8 +35,21 @@ struct ac_nir_compiler_options {
 	struct radv_pipeline_layout *layout;
 };
 
+struct ac_shader_variant_info {
+	union {
+		struct {
+			unsigned param_exports;
+		} vs;
+		struct {
+			unsigned num_interp;
+			uint32_t flat_shaded_mask;
+		} fs;
+	};
+};
+
 void ac_compile_nir_shader(LLVMTargetMachineRef tm,
                            struct ac_shader_binary *binary,
                            struct ac_shader_config *config,
+                           struct ac_shader_variant_info *shader_info,
                            struct nir_shader *nir,
                            const struct ac_nir_compiler_options *options);

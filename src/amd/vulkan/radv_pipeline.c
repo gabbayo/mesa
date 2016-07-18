@@ -213,7 +213,7 @@ struct radv_shader_variant *radv_shader_variant_create(struct radv_device *devic
    options.layout = layout;
    struct ac_shader_binary binary;
    ac_compile_nir_shader(device->target_machine, &binary, &variant->config,
-                         shader, &options);
+                         &variant->info, shader, &options);
 
    bool scratch_enabled = variant->config.scratch_bytes_per_wave > 0;
    unsigned vgpr_comp_cnt = 0;

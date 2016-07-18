@@ -237,6 +237,7 @@ radv_emit_vertex_shader(struct radv_cmd_buffer *cmd_buffer,
     struct radeon_winsys *ws = cmd_buffer->device->ws;
     struct radv_shader_variant *vs;
     uint64_t va;
+    unsigned export_count;
 
     assert (pipeline->shaders[MESA_SHADER_VERTEX]);
 
@@ -247,7 +248,9 @@ radv_emit_vertex_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_028A40_VGT_GS_MODE, 0);
     radeon_set_context_reg(cmd_buffer->cs, R_028A84_VGT_PRIMITIVEID_EN, 0);
 
-    radeon_set_context_reg(cmd_buffer->cs, R_0286C4_SPI_VS_OUT_CONFIG, 0);
+    export_count = MAX2(1, vs->info.vs.param_exports);
+    radeon_set_context_reg(cmd_buffer->cs, R_0286C4_SPI_VS_OUT_CONFIG,
+                           S_0286C4_VS_EXPORT_COUNT(export_count - 1));
     radeon_set_context_reg(cmd_buffer->cs, R_02870C_SPI_SHADER_POS_FORMAT, S_02870C_POS0_EXPORT_FORMAT(V_02870C_SPI_SHADER_4COMP));
 
     radeon_set_sh_reg_seq(cmd_buffer->cs, R_00B120_SPI_SHADER_PGM_LO_VS, 4);
@@ -299,7 +302,9 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
 			   ps->config.spi_ps_input_addr);
 
     spi_baryc_cntl |= S_0286E0_POS_FLOAT_LOCATION(2);
-    radeon_set_context_reg(cmd_buffer->cs, R_0286D8_SPI_PS_IN_CONTROL, 1);
+    radeon_set_context_reg(cmd_buffer->cs, R_0286D8_SPI_PS_IN_CONTROL,
+			   S_0286D8_NUM_INTERP(ps->info.fs.num_interp));
+
     radeon_set_context_reg(cmd_buffer->cs, R_0286E0_SPI_BARYC_CNTL, spi_baryc_cntl);
 
     radeon_set_context_reg(cmd_buffer->cs, R_028710_SPI_SHADER_Z_FORMAT, V_028710_SPI_SHADER_ZERO);
@@ -309,8 +314,11 @@ radv_emit_fragment_shader(struct radv_cmd_buffer *cmd_buffer,
     radeon_set_context_reg(cmd_buffer->cs, R_028238_CB_TARGET_MASK, 0xf);
     radeon_set_context_reg(cmd_buffer->cs, R_02823C_CB_SHADER_MASK, 0xf);
 
-    radeon_set_context_reg(cmd_buffer->cs, R_028644_SPI_PS_INPUT_CNTL_0,
-			   S_028644_FLAT_SHADE(0));
+    for (unsigned i = 0; i < ps->info.fs.num_interp; ++i) {
+       unsigned flat_shade = !!(ps->info.fs.flat_shaded_mask & (1u << i));
+       radeon_set_context_reg(cmd_buffer->cs, R_028644_SPI_PS_INPUT_CNTL_0 + 4 * i,
+			      S_028644_OFFSET(i) | S_028644_FLAT_SHADE(flat_shade));
+    }
 }
 
 static void
