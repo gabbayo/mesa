@@ -611,6 +611,9 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 	case nir_op_fsqrt:
 		result = emit_intrin_2f_param(ctx, "llvm.sqrt.f32", src[0], src[1]);
 		break;
+	case nir_op_fpow:
+		result = emit_intrin_2f_param(ctx, "llvm.pow.f32", src[0], src[1]);
+		break;
 	case nir_op_fmax:
 		result = emit_intrin_2f_param(ctx, "llvm.maxnum.f32", src[0], src[1]);
 		break;
