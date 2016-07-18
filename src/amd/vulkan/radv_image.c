@@ -633,3 +633,49 @@ radv_DestroyImageView(VkDevice _device, VkImageView _iview,
 
    radv_free2(&device->alloc, pAllocator, iview);
 }
+
+void radv_buffer_view_init(struct radv_buffer_view *view,
+			   struct radv_device *device,
+			   const VkBufferViewCreateInfo* pCreateInfo,
+			   struct radv_cmd_buffer *cmd_buffer)
+{
+   RADV_FROM_HANDLE(radv_buffer, buffer, pCreateInfo->buffer);
+
+   view->bo = buffer->bo;
+   view->offset = buffer->offset + pCreateInfo->offset;
+   view->range = pCreateInfo->range == VK_WHOLE_SIZE ?
+     buffer->size - view->offset : pCreateInfo->range;
+   view->vk_format = pCreateInfo->format;
+   /* TODO texture buffers */
+}
+
+VkResult
+radv_CreateBufferView(VkDevice _device,
+                     const VkBufferViewCreateInfo *pCreateInfo,
+                     const VkAllocationCallbacks *pAllocator,
+                     VkBufferView *pView)
+{
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   struct radv_buffer_view *view;
+
+   view = radv_alloc2(&device->alloc, pAllocator, sizeof(*view), 8,
+                     VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+   if (!view)
+      return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
+
+   radv_buffer_view_init(view, device, pCreateInfo, NULL);
+
+   *pView = radv_buffer_view_to_handle(view);
+
+   return VK_SUCCESS;
+}
+
+void
+radv_DestroyBufferView(VkDevice _device, VkBufferView bufferView,
+                      const VkAllocationCallbacks *pAllocator)
+{
+   RADV_FROM_HANDLE(radv_device, device, _device);
+   RADV_FROM_HANDLE(radv_buffer_view, view, bufferView);
+
+   radv_free2(&device->alloc, pAllocator, view);
+}

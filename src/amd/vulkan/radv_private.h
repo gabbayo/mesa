@@ -870,9 +870,14 @@ void radv_image_view_init(struct radv_image_view *view,
 
 struct radv_buffer_view {
    struct radv_bo *bo;
+   VkFormat vk_format;
    uint32_t offset; /**< Offset into bo. */
    uint64_t range; /**< VkBufferViewCreateInfo::range */
 };
+void radv_buffer_view_init(struct radv_buffer_view *view,
+			   struct radv_device *device,
+			   const VkBufferViewCreateInfo* pCreateInfo,
+			   struct radv_cmd_buffer *cmd_buffer);
 
 static inline struct VkExtent3D
 radv_sanitize_image_extent(const VkImageType imageType,
