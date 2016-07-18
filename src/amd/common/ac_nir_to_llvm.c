@@ -732,6 +732,16 @@ static LLVMValueRef build_tex_intrinsic(struct nir_to_llvm_context *ctx,
 	char intr_name[127];
 	char type[64];
 
+	switch (instr->op) {
+	case nir_texop_txf:
+		name = instr->sampler_dim == GLSL_SAMPLER_DIM_MS ?
+			"llvm.SI.image.load" :
+			"llvm.SI.image.load.mip";
+		break;
+	default:
+		break;
+	}
+
 	if (instr->coord_components > 1)
 		snprintf(type, 6, "v%ui32", instr->coord_components);
 	else
@@ -1009,15 +1019,17 @@ static void set_tex_fetch_args(struct nir_to_llvm_context *ctx,
 	tinfo->args[1] = get_sampler_desc(ctx, instr->texture, ctx->i32zero, DESC_IMAGE);
 	num_args = 2;
 
-	tinfo->dst_type = ctx->v4f32;
-
-	tinfo->args[num_args++] = get_sampler_desc(ctx, instr->sampler, ctx->i32zero, DESC_SAMPLER);
+	if (instr->op == nir_texop_txf || instr->op == nir_texop_query_levels)
+		tinfo->dst_type = ctx->v4i32;
+	else {
+		tinfo->dst_type = ctx->v4f32;
+		tinfo->args[num_args++] = get_sampler_desc(ctx, instr->sampler, ctx->i32zero, DESC_SAMPLER);
+	}
 
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, dmask, 0);
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, is_rect, 0); /* unorm */
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* r128 */
-	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0);
-//TODO					tgsi_is_array_sampler(target)); /* da */
+	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, instr->is_array);
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* glc */
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* slc */
 	tinfo->args[num_args++] = LLVMConstInt(ctx->i32, 0, 0); /* tfe */
