@@ -609,7 +609,7 @@ static void visit_alu(struct nir_to_llvm_context *ctx, nir_alu_instr *instr)
 		result = emit_intrin_1f_param(ctx, "llvm.fabs.f32", src[0]);
 		break;
 	case nir_op_fsqrt:
-		result = emit_intrin_2f_param(ctx, "llvm.sqrt.f32", src[0], src[1]);
+		result = emit_intrin_1f_param(ctx, "llvm.sqrt.f32", src[0]);
 		break;
 	case nir_op_fpow:
 		result = emit_intrin_2f_param(ctx, "llvm.pow.f32", src[0], src[1]);
