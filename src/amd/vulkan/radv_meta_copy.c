@@ -74,10 +74,6 @@ blit_surf_for_image(const struct radv_image* image,
 {
    return (struct radv_meta_blit2d_surf) {
       .bo = image->bo,
-       //      .tiling = surf->isl.tiling,
-       //      .base_offset = image->offset + surf->offset,
-       //      .bs = isl_format_get_layout(surf->isl.format)->bs,
-       //      .pitch = isl_surf_get_row_pitch(&surf->isl),
    };
 }
 
@@ -89,14 +85,12 @@ do_buffer_copy(struct radv_cmd_buffer *cmd_buffer,
 {
    struct radv_meta_blit2d_surf b_src = {
       .bo = src,
-      //      .tiling = ISL_TILING_LINEAR,
       .base_offset = src_offset,
       .bs = bs,
       .pitch = width * bs,
    };
    struct radv_meta_blit2d_surf b_dst = {
       .bo = dest,
-      //      .tiling = ISL_TILING_LINEAR,
       .base_offset = dest_offset,
       .bs = bs,
       .pitch = width * bs,
@@ -164,9 +158,7 @@ meta_copy_buffer_to_image(struct radv_cmd_buffer *cmd_buffer,
          blit_surf_for_image(image, img_surf);
       struct radv_meta_blit2d_surf buf_bsurf = {
          .bo = buffer->bo,
-	 //         .tiling = ISL_TILING_LINEAR,
          .base_offset = buffer->offset + pRegions[r].bufferOffset,
-         //.bs = isl_format_get_layout(buf_format)->bs,
          .pitch = buf_extent_el.width * buf_bsurf.bs,
       };
 

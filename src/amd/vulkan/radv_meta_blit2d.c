@@ -107,7 +107,6 @@ create_iview(struct radv_cmd_buffer *cmd_buffer,
    radv_image_create(radv_device_to_handle(cmd_buffer->device),
                     &(struct radv_image_create_info) {
                        .vk_info = &image_info,
-			 //                       .isl_tiling_flags = 1 << surf->tiling,
                        .stride = surf->pitch,
                     }, &cmd_buffer->pool->alloc, img);
 
@@ -137,9 +136,6 @@ struct blit2d_src_temps {
    VkImage image;
    struct radv_image_view iview;
 
-   struct radv_buffer buffer;
-   struct radv_buffer_view bview;
-
    VkDescriptorPool desc_pool;
    VkDescriptorSet set;
 };
@@ -156,12 +152,6 @@ blit2d_bind_src(struct radv_cmd_buffer *cmd_buffer,
 
    if (src_type == BLIT2D_SRC_TYPE_NORMAL) {
       uint32_t offset = 0;
-#if 0
-      isl_tiling_get_intratile_offset_el(&cmd_buffer->device->isl_dev,
-                                         src->tiling, src->bs, src->pitch,
-                                         rect->src_x, rect->src_y,
-                                         &offset, &rect->src_x, &rect->src_y);
-#endif
       create_iview(cmd_buffer, src, offset, VK_IMAGE_USAGE_SAMPLED_BIT,
                    rect->src_x + rect->width, rect->src_y + rect->height,
                    &tmp->image, &tmp->iview);
@@ -212,77 +202,6 @@ blit2d_bind_src(struct radv_cmd_buffer *cmd_buffer,
       radv_CmdBindDescriptorSets(radv_cmd_buffer_to_handle(cmd_buffer),
                                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 device->meta_state.blit2d.img_p_layout, 0, 1,
-                                &tmp->set, 0, NULL);
-   } else {
-      //      assert(src->tiling == ISL_TILING_W);
-      assert(src->bs == 1);
-
-      uint32_t tile_offset = 0;
-#if 0
-      isl_tiling_get_intratile_offset_el(&cmd_buffer->device->isl_dev,
-                                         ISL_TILING_W, 1, src->pitch,
-                                         rect->src_x, rect->src_y,
-                                         &tile_offset,
-                                         &rect->src_x, &rect->src_y);
-#endif
-      tmp->buffer = (struct radv_buffer) {
-         .device = device,
-         .size = align_u32(rect->src_y + rect->height, 64) * src->pitch,
-         .usage = VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT,
-         .bo = src->bo,
-         .offset = src->base_offset + tile_offset,
-      };
-
-      radv_buffer_view_init(&tmp->bview, device,
-         &(VkBufferViewCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
-            .buffer = radv_buffer_to_handle(&tmp->buffer),
-            .format = VK_FORMAT_R8_UINT,
-            .offset = 0,
-            .range = VK_WHOLE_SIZE,
-         }, cmd_buffer);
-      radv_CreateDescriptorPool(vk_device,
-         &(const VkDescriptorPoolCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .maxSets = 1,
-            .poolSizeCount = 1,
-            .pPoolSizes = (VkDescriptorPoolSize[]) {
-               {
-                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
-                  .descriptorCount = 1
-               },
-            }
-         }, &cmd_buffer->pool->alloc, &tmp->desc_pool);
-
-      radv_AllocateDescriptorSets(vk_device,
-         &(VkDescriptorSetAllocateInfo) {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = tmp->desc_pool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &device->meta_state.blit2d.buf_ds_layout
-         }, &tmp->set);
-
-      radv_UpdateDescriptorSets(vk_device,
-         1, /* writeCount */
-         (VkWriteDescriptorSet[]) {
-            {
-               .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-               .dstSet = tmp->set,
-               .dstBinding = 0,
-               .dstArrayElement = 0,
-               .descriptorCount = 1,
-               .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
-               .pTexelBufferView = (VkBufferView[]) {
-                  radv_buffer_view_to_handle(&tmp->bview),
-               },
-            }
-         }, 0, NULL);
-
-      radv_CmdBindDescriptorSets(radv_cmd_buffer_to_handle(cmd_buffer),
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                device->meta_state.blit2d.buf_p_layout, 0, 1,
                                 &tmp->set, 0, NULL);
    }
 }
@@ -382,13 +301,6 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
       blit2d_bind_src(cmd_buffer, src, src_type, &rects[r], &src_temps);
 
       uint32_t offset = 0;
-#if 0
-      isl_tiling_get_intratile_offset_el(&cmd_buffer->device->isl_dev,
-                                         dst->tiling, dst->bs, dst->pitch,
-                                         rects[r].dst_x, rects[r].dst_y,
-                                         &offset,
-                                         &rects[r].dst_x, &rects[r].dst_y);
-#endif
       struct blit2d_dst_temps dst_temps;
       blit2d_bind_dst(cmd_buffer, dst, offset, rects[r].dst_x + rects[r].width,
                       rects[r].dst_y + rects[r].height, &dst_temps);
@@ -519,21 +431,12 @@ build_nir_vertex_shader(void)
 
    nir_variable *tex_pos_in = nir_variable_create(b.shader, nir_var_shader_in,
                                                   vec4, "a_tex_pos");
-   tex_pos_in->data.location = VERT_ATTRIB_GENERIC0;
+   tex_pos_in->data.location = VERT_ATTRIB_GENERIC1;
    nir_variable *tex_pos_out = nir_variable_create(b.shader, nir_var_shader_out,
                                                    vec4, "v_tex_pos");
    tex_pos_out->data.location = VARYING_SLOT_VAR0;
    tex_pos_out->data.interpolation = INTERP_QUALIFIER_SMOOTH;
    nir_copy_var(&b, tex_pos_out, tex_pos_in);
-
-   nir_variable *other_in = nir_variable_create(b.shader, nir_var_shader_in,
-                                                vec4, "a_other");
-   other_in->data.location = VERT_ATTRIB_GENERIC1;
-   nir_variable *other_out = nir_variable_create(b.shader, nir_var_shader_out,
-                                                   vec4, "v_other");
-   other_out->data.location = VARYING_SLOT_VAR1;
-   other_out->data.interpolation = INTERP_QUALIFIER_FLAT;
-   nir_copy_var(&b, other_out, other_in);
 
    return b.shader;
 }
