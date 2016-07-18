@@ -88,12 +88,14 @@ do_buffer_copy(struct radv_cmd_buffer *cmd_buffer,
       .base_offset = src_offset,
       .bs = bs,
       .pitch = width * bs,
+      .tiling = VK_IMAGE_TILING_LINEAR,
    };
    struct radv_meta_blit2d_surf b_dst = {
       .bo = dest,
       .base_offset = dest_offset,
       .bs = bs,
       .pitch = width * bs,
+      .tiling = VK_IMAGE_TILING_LINEAR,
    };
    struct radv_meta_blit2d_rect rect = {
       .width = width,

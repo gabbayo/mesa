@@ -84,6 +84,7 @@ struct radv_meta_blit2d_surf {
 
    /** Pitch between rows in bytes. */
    uint32_t pitch;
+   VkImageTiling tiling;
 };
 
 struct radv_meta_blit2d_rect {

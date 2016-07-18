@@ -100,6 +100,7 @@ create_iview(struct radv_cmd_buffer *cmd_buffer,
       .mipLevels = 1,
       .arrayLayers = 1,
       .samples = 1,
+      .tiling = surf->tiling,
       .usage = usage,
    };
 
@@ -314,12 +315,12 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
 
       vb_data[0] = (struct blit_vb_data) {
          .pos = {
-            rects[r].dst_x + rects[r].width,
-            rects[r].dst_y + rects[r].height,
+            rects[r].dst_x,
+            rects[r].dst_y,
          },
          .tex_coord = {
-            rects[r].src_x + rects[r].width,
-            rects[r].src_y + rects[r].height,
+            rects[r].src_x,
+            rects[r].src_y,
             src->pitch,
          },
       };
@@ -338,11 +339,11 @@ radv_meta_blit2d_normal_dst(struct radv_cmd_buffer *cmd_buffer,
 
       vb_data[2] = (struct blit_vb_data) {
          .pos = {
-            rects[r].dst_x,
+            rects[r].dst_x + rects[r].width,
             rects[r].dst_y,
          },
          .tex_coord = {
-            rects[r].src_x,
+            rects[r].src_x + rects[r].width,
             rects[r].src_y,
             src->pitch,
          },
@@ -555,18 +556,6 @@ radv_device_finish_meta_blit2d_state(struct radv_device *device)
                                      &device->meta_state.alloc);
    }
 
-   if (device->meta_state.blit2d.buf_p_layout) {
-      radv_DestroyPipelineLayout(radv_device_to_handle(device),
-                                device->meta_state.blit2d.buf_p_layout,
-                                &device->meta_state.alloc);
-   }
-
-   if (device->meta_state.blit2d.buf_ds_layout) {
-      radv_DestroyDescriptorSetLayout(radv_device_to_handle(device),
-                                     device->meta_state.blit2d.buf_ds_layout,
-                                     &device->meta_state.alloc);
-   }
-
    for (unsigned src = 0; src < BLIT2D_NUM_SRC_TYPES; src++) {
       for (unsigned dst = 0; dst < BLIT2D_NUM_DST_TYPES; dst++) {
          if (device->meta_state.blit2d.pipelines[src][dst]) {
@@ -770,35 +759,8 @@ radv_device_init_meta_blit2d_state(struct radv_device *device)
    if (result != VK_SUCCESS)
       goto fail;
 
-   result = radv_CreateDescriptorSetLayout(radv_device_to_handle(device),
-      &(VkDescriptorSetLayoutCreateInfo) {
-         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-         .bindingCount = 1,
-         .pBindings = (VkDescriptorSetLayoutBinding[]) {
-            {
-               .binding = 0,
-               .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
-               .descriptorCount = 1,
-               .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-               .pImmutableSamplers = NULL
-            },
-         }
-      }, &device->meta_state.alloc, &device->meta_state.blit2d.buf_ds_layout);
-   if (result != VK_SUCCESS)
-      goto fail;
-
-   result = radv_CreatePipelineLayout(radv_device_to_handle(device),
-      &(VkPipelineLayoutCreateInfo) {
-         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-         .setLayoutCount = 1,
-         .pSetLayouts = &device->meta_state.blit2d.buf_ds_layout,
-      },
-      &device->meta_state.alloc, &device->meta_state.blit2d.buf_p_layout);
-   if (result != VK_SUCCESS)
-      goto fail;
-
    for (unsigned src = 0; src < BLIT2D_NUM_SRC_TYPES; src++) {
-      for (unsigned dst = 0; dst < BLIT2D_NUM_DST_TYPES; dst++) {
+      for (unsigned dst = 0; dst < 1; /*BLIT2D_NUM_DST_TYPES;*/ dst++) {
          result = blit2d_init_pipeline(device, src, dst);
          if (result != VK_SUCCESS)
             goto fail;
