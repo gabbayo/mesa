@@ -61,7 +61,7 @@ vk_format_for_size(int bs)
    case 3: return VK_FORMAT_R8G8B8_UNORM;
    case 4: return VK_FORMAT_R8G8B8A8_UNORM;
    case 6: return VK_FORMAT_R16G16B16_UNORM;
-   case 8: return VK_FORMAT_R16G16B16A16_UNORM;
+   case 8: return VK_FORMAT_R16G16B16A16_UINT;
    case 12: return VK_FORMAT_R32G32B32_UINT;
    case 16: return VK_FORMAT_R32G32B32A32_UINT;
    default:
@@ -396,6 +396,7 @@ static nir_shader *
 build_nir_vertex_shader(void)
 {
    const struct glsl_type *vec4 = glsl_vec4_type();
+   const struct glsl_type *vec2 = glsl_vector_type(GLSL_TYPE_FLOAT, 2);
    nir_builder b;
 
    nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_VERTEX, NULL);
@@ -410,10 +411,10 @@ build_nir_vertex_shader(void)
    nir_copy_var(&b, pos_out, pos_in);
 
    nir_variable *tex_pos_in = nir_variable_create(b.shader, nir_var_shader_in,
-                                                  vec4, "a_tex_pos");
+                                                  vec2, "a_tex_pos");
    tex_pos_in->data.location = VERT_ATTRIB_GENERIC1;
    nir_variable *tex_pos_out = nir_variable_create(b.shader, nir_var_shader_out,
-                                                   vec4, "v_tex_pos");
+                                                   vec2, "v_tex_pos");
    tex_pos_out->data.location = VARYING_SLOT_VAR0;
    tex_pos_out->data.interpolation = INTERP_QUALIFIER_SMOOTH;
    nir_copy_var(&b, tex_pos_out, tex_pos_in);
@@ -489,14 +490,14 @@ build_nir_copy_fragment_shader(struct radv_device *device,
                                texel_fetch_build_func txf_func)
 {
    const struct glsl_type *vec4 = glsl_vec4_type();
-   const struct glsl_type *vec3 = glsl_vector_type(GLSL_TYPE_FLOAT, 3);
+   const struct glsl_type *vec2 = glsl_vector_type(GLSL_TYPE_FLOAT, 2);
    nir_builder b;
 
    nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_FRAGMENT, NULL);
    b.shader->info.name = ralloc_strdup(b.shader, "meta_blit2d_fs");
 
    nir_variable *tex_pos_in = nir_variable_create(b.shader, nir_var_shader_in,
-                                                  vec3, "v_tex_pos");
+                                                  vec2, "v_tex_pos");
    tex_pos_in->data.location = VARYING_SLOT_VAR0;
 
    nir_variable *color_out = nir_variable_create(b.shader, nir_var_shader_out,
