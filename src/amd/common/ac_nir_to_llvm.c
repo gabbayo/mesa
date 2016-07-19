@@ -134,6 +134,26 @@ static unsigned radeon_llvm_reg_index_soa(unsigned index, unsigned chan)
 	return (index * 4) + chan;
 }
 
+static unsigned llvm_get_type_size(LLVMTypeRef type)
+{
+	LLVMTypeKind kind = LLVMGetTypeKind(type);
+
+	switch (kind) {
+	case LLVMIntegerTypeKind:
+		return LLVMGetIntTypeWidth(type) / 8;
+	case LLVMFloatTypeKind:
+		return 4;
+	case LLVMPointerTypeKind:
+		return 8;
+	case LLVMVectorTypeKind:
+		return LLVMGetVectorSize(type) *
+		       llvm_get_type_size(LLVMGetElementType(type));
+	default:
+		assert(0);
+		return 0;
+	}
+}
+
 static void set_llvm_calling_convention(LLVMValueRef func,
                                         gl_shader_stage stage)
 {
@@ -258,11 +278,11 @@ static LLVMValueRef build_indexed_load_const(struct nir_to_llvm_context *ctx,
 static void create_function(struct nir_to_llvm_context *ctx,
                             struct nir_shader *nir)
 {
-	LLVMTypeRef arg_types[20];
+	LLVMTypeRef arg_types[23];
 	unsigned arg_idx = 0;
 	unsigned array_count = 0;
-	unsigned sgpr_count = 0;
-
+	unsigned sgpr_count = 0, user_sgpr_count;
+	unsigned i;
 	for (unsigned i = 0; i < 4; ++i)
 		arg_types[arg_idx++] = const_array(ctx->i32, 1024 * 1024);
 
@@ -270,7 +290,7 @@ static void create_function(struct nir_to_llvm_context *ctx,
 	switch (nir->stage) {
 	case MESA_SHADER_COMPUTE:
 		arg_types[arg_idx++] = LLVMVectorType(ctx->i32, 3);
-		sgpr_count = arg_idx;
+		user_sgpr_count  = sgpr_count = arg_idx;
 
 		arg_types[arg_idx++] = LLVMVectorType(ctx->i32, 3);
 		break;
@@ -278,7 +298,7 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		arg_types[arg_idx++] = const_array(ctx->v16i8, 16);
 		arg_types[arg_idx++] = ctx->i32; // base vertex
 		arg_types[arg_idx++] = ctx->i32; // start instance
-		sgpr_count = arg_idx;
+		user_sgpr_count = sgpr_count = arg_idx;
 		arg_types[arg_idx++] = ctx->i32; // vertex id
 		arg_types[arg_idx++] = ctx->i32; // rel auto id
 		arg_types[arg_idx++] = ctx->i32; // vs prim id
@@ -286,6 +306,7 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		break;
 	case MESA_SHADER_FRAGMENT:
 		arg_types[arg_idx++] = ctx->f32; /* alpha ref */
+		user_sgpr_count = arg_idx;
 		arg_types[arg_idx++] = ctx->i32; /* prim mask */
 		sgpr_count = arg_idx;
 		arg_types[arg_idx++] = ctx->v2i32; /* persp sample */
@@ -295,6 +316,15 @@ static void create_function(struct nir_to_llvm_context *ctx,
 		arg_types[arg_idx++] = ctx->v2i32; /* linear sample */
 		arg_types[arg_idx++] = ctx->v2i32; /* linear center */
 		arg_types[arg_idx++] = ctx->v2i32; /* linear centroid */
+		arg_types[arg_idx++] = ctx->f32;  /* line stipple tex */
+		arg_types[arg_idx++] = ctx->f32;  /* pos x float */
+		arg_types[arg_idx++] = ctx->f32;  /* pos y float */
+		arg_types[arg_idx++] = ctx->f32;  /* pos z float */
+		arg_types[arg_idx++] = ctx->f32;  /* pos w float */
+		arg_types[arg_idx++] = ctx->i32;  /* front face */
+		arg_types[arg_idx++] = ctx->i32;  /* ancillary */
+		arg_types[arg_idx++] = ctx->f32;  /* sample coverage */
+		arg_types[arg_idx++] = ctx->i32;  /* fixed pt */
 		break;
 	default:
 		unreachable("Shader stage not implemented");
@@ -305,8 +335,18 @@ static void create_function(struct nir_to_llvm_context *ctx,
 	    arg_idx, array_count, sgpr_count);
 	set_llvm_calling_convention(ctx->main_function, nir->stage);
 
-	arg_idx = 0;
 
+	ctx->shader_info->num_input_sgprs = 0;
+	ctx->shader_info->num_input_vgprs = 0;
+
+	for (i = 0; i < user_sgpr_count; i++)
+		ctx->shader_info->num_input_sgprs += llvm_get_type_size(arg_types[i]) / 4;
+
+	if (nir->stage != MESA_SHADER_FRAGMENT)
+		for (; i < arg_idx; ++i)
+			ctx->shader_info->num_input_vgprs += llvm_get_type_size(arg_types[i]) / 4;
+
+	arg_idx = 0;
 	for (unsigned i = 0; i < 4; ++i)
 		ctx->descriptor_sets[i] =
 		    LLVMGetParam(ctx->main_function, arg_idx++);
@@ -1780,11 +1820,49 @@ void ac_compile_nir_shader(LLVMTargetMachineRef tm,
 		fprintf(stderr, "compile failed\n");
 	}
 
-	printf("disasm:\n%s\n", binary->disasm_string);
+	fprintf(stderr, "disasm:\n%s\n", binary->disasm_string);
 
 	ac_shader_binary_read_config(binary, config, 0);
 
 	LLVMContextRef ctx = LLVMGetModuleContext(llvm_module);
 	LLVMDisposeModule(llvm_module);
 	LLVMContextDispose(ctx);
+
+	if (nir->stage == MESA_SHADER_FRAGMENT) {
+		shader_info->num_input_vgprs = 0;
+		if (G_0286CC_PERSP_SAMPLE_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 2;
+		if (G_0286CC_PERSP_CENTER_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 2;
+		if (G_0286CC_PERSP_CENTROID_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 2;
+		if (G_0286CC_PERSP_PULL_MODEL_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 3;
+		if (G_0286CC_LINEAR_SAMPLE_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 2;
+		if (G_0286CC_LINEAR_CENTER_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 2;
+		if (G_0286CC_LINEAR_CENTROID_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 2;
+		if (G_0286CC_LINE_STIPPLE_TEX_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_POS_X_FLOAT_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_POS_Y_FLOAT_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_POS_Z_FLOAT_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_POS_W_FLOAT_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_FRONT_FACE_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_ANCILLARY_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_SAMPLE_COVERAGE_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		if (G_0286CC_POS_FIXED_PT_ENA(config->spi_ps_input_addr))
+			shader_info->num_input_vgprs += 1;
+		config->num_vgprs = MAX2(config->num_vgprs,
+					 shader_info->num_input_vgprs);
+	}
 }
