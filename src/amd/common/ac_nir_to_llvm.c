@@ -1101,25 +1101,34 @@ static void set_tex_fetch_args(struct nir_to_llvm_context *ctx,
 	int num_args;
 	unsigned is_rect = 0;
 	LLVMValueRef coord;
-
+	LLVMValueRef coord_vals[4];
+	LLVMValueRef masks[] = {
+	  LLVMConstInt(ctx->i32, 0, false), LLVMConstInt(ctx->i32, 1, false),
+	  LLVMConstInt(ctx->i32, 2, false), LLVMConstInt(ctx->i32, 3, false),
+	};
 	coord = get_src(ctx, instr->src[0].src);
 	coord = trim_vector(ctx, coord, instr->coord_components);
 
+	if (instr->coord_components >= 1)
+	  coord_vals[0] = LLVMBuildExtractElement(ctx->builder, coord, masks[0], "");
+	if (instr->coord_components >= 2)
+	  coord_vals[1] = LLVMBuildExtractElement(ctx->builder, coord, masks[1], "");
+	if (instr->coord_components >= 3)
+	  coord_vals[2] = LLVMBuildExtractElement(ctx->builder, coord, masks[2], "");
+
 	if (instr->op == nir_texop_txf || instr->op == nir_texop_txb) {
-		LLVMValueRef values[4];
 		LLVMValueRef lod = get_src(ctx, instr->src[1].src);
-		/* put LOD in */
-		LLVMValueRef masks[] = {
-			LLVMConstInt(ctx->i32, 0, false), LLVMConstInt(ctx->i32, 1, false),
-		};
-		values[0] = LLVMBuildExtractElement(ctx->builder, coord, masks[0], "");
-		values[1] = LLVMBuildExtractElement(ctx->builder, coord, masks[1], "");
-		values[2] = lod;
-		values[3] = LLVMGetUndef(ctx->i32);
-		coord = build_gather_values(ctx, values, 4);
-		tinfo->coord_components = 4;
-        } else
+		coord_vals[2] = lod;
+		tinfo->coord_components = 3;
+	} else
 		tinfo->coord_components = instr->coord_components;
+
+	if (tinfo->coord_components == 3) {
+		coord_vals[3] = LLVMGetUndef(ctx->i32);
+		tinfo->coord_components = 4;
+	}
+
+	coord = build_gather_values(ctx, coord_vals, tinfo->coord_components);
 
 	tinfo->args[0] = coord; /* texture coordinate */
 	tinfo->args[1] = get_sampler_desc(ctx, instr->texture, ctx->i32zero, DESC_IMAGE);
