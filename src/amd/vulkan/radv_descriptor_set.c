@@ -201,6 +201,7 @@ VkResult radv_CreateDescriptorPool(
    if (!pool)
       return vk_error(VK_ERROR_OUT_OF_HOST_MEMORY);
 
+   *pDescriptorPool = radv_descriptor_pool_to_handle(pool);
    return VK_SUCCESS;
 }
 
