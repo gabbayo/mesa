@@ -1159,6 +1159,7 @@ static void visit_tex(struct nir_to_llvm_context *ctx, nir_tex_instr *instr)
 
 	if (result) {
 		assert(instr->dest.is_ssa);
+		result = to_integer(ctx, result);
 		_mesa_hash_table_insert(ctx->defs, &instr->dest.ssa, result);
 	}
 }
