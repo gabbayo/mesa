@@ -846,6 +846,22 @@ void radv_UnmapMemory(
    device->ws->buffer_unmap(mem->bo.bo);
 }
 
+VkResult radv_FlushMappedMemoryRanges(
+    VkDevice                                    _device,
+    uint32_t                                    memoryRangeCount,
+    const VkMappedMemoryRange*                  pMemoryRanges)
+{
+    return VK_SUCCESS;
+}
+
+VkResult radv_InvalidateMappedMemoryRanges(
+    VkDevice                                    _device,
+    uint32_t                                    memoryRangeCount,
+    const VkMappedMemoryRange*                  pMemoryRanges)
+{
+    return VK_SUCCESS;
+}
+
 void radv_GetBufferMemoryRequirements(
     VkDevice                                    device,
     VkBuffer                                    _buffer,
