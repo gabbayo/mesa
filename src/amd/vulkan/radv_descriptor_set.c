@@ -336,20 +336,27 @@ static void write_buffer_descriptor(struct radv_device *device,
 }
 
 static void
+write_image_descriptor(struct radv_device *device,
+		       unsigned *dst,
+		       struct radv_bo **buffer_list,
+		       const VkDescriptorImageInfo *image_info)
+{
+    RADV_FROM_HANDLE(radv_image_view, iview, image_info->imageView);
+    memcpy(dst, iview->descriptor, 8 * 4);
+    memcpy(dst + 8, iview->fmask_descriptor, 8 * 4);
+    *buffer_list = iview->bo;
+}
+static void
 write_combined_image_sampler_descriptor(struct radv_device *device,
 					unsigned *dst,
 					struct radv_bo **buffer_list,
 					const VkDescriptorImageInfo *image_info)
 {
     RADV_FROM_HANDLE(radv_sampler, sampler, image_info->sampler);
-    RADV_FROM_HANDLE(radv_image_view, iview, image_info->imageView);
 
-    memcpy(dst, iview->descriptor, 8 * 4);
-    memcpy(dst + 8, iview->fmask_descriptor, 8 * 4);
+    write_image_descriptor(device, dst, buffer_list, image_info);
     /* copy over sampler state */
     memcpy(dst + 16, sampler->state, 16);
-
-    *buffer_list = iview->bo;
 }
 
 void radv_UpdateDescriptorSets(
@@ -377,9 +384,14 @@ void radv_UpdateDescriptorSets(
          switch(writeset->descriptorType) {
          case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
          case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+         case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
             write_buffer_descriptor(device, ptr, buffer_list,
                                     writeset->pBufferInfo + j);
             break;
+	 case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+             write_image_descriptor(device, ptr, buffer_list,
+                                    writeset->pImageInfo + j);
+             break;
 	 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
 	   write_combined_image_sampler_descriptor(device, ptr, buffer_list,
 						   writeset->pImageInfo + j);
