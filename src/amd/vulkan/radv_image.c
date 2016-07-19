@@ -200,34 +200,17 @@ si_make_texture_descriptor(struct radv_device *device,
 	default:
 		if (first_non_void < 0) {
 			if (vk_format_is_compressed(vk_format)) {
-#if 0
 				switch (vk_format) {
-				case VK_FORMAT_DXT1_SRGB:
-				case VK_FORMAT_DXT1_SRGBA:
-				case VK_FORMAT_DXT3_SRGBA:
-				case VK_FORMAT_DXT5_SRGBA:
-				case VK_FORMAT_BPTC_SRGBA:
-				case VK_FORMAT_ETC2_SRGB8:
-				case VK_FORMAT_ETC2_SRGB8A1:
-				case VK_FORMAT_ETC2_SRGBA8:
+				case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+				case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+				case VK_FORMAT_BC2_SRGB_BLOCK:
+				case VK_FORMAT_BC3_SRGB_BLOCK:
 					num_format = V_008F14_IMG_NUM_FORMAT_SRGB;
-					break;
-				case VK_FORMAT_RGTC1_SNORM:
-				case VK_FORMAT_LATC1_SNORM:
-				case VK_FORMAT_RGTC2_SNORM:
-				case VK_FORMAT_LATC2_SNORM:
-				case VK_FORMAT_ETC2_R11_SNORM:
-				case VK_FORMAT_ETC2_RG11_SNORM:
-				/* implies float, so use SNORM/UNORM to determine
-				   whether data is signed or not */
-				case VK_FORMAT_BPTC_RGB_FLOAT:
-					num_format = V_008F14_IMG_NUM_FORMAT_SNORM;
 					break;
 				default:
 					num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
 					break;
 				}
-#endif
 			} else if (desc->layout == VK_FORMAT_LAYOUT_SUBSAMPLED) {
 				num_format = V_008F14_IMG_NUM_FORMAT_UNORM;
 			} else {
