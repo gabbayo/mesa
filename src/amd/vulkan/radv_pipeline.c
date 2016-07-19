@@ -407,7 +407,7 @@ radv_pipeline_init_raster_state(struct radv_pipeline *pipeline,
 	S_028810_DX_LINEAR_ATTR_CLIP_ENA(1);
 
     raster->pa_su_vtx_cntl =
-	S_028BE4_PIX_CENTER(0) | // TODO verify
+        S_028BE4_PIX_CENTER(1) | // TODO verify
 	S_028BE4_QUANT_MODE(V_028BE4_X_16_8_FIXED_POINT_1_256TH);
 
     raster->pa_sc_mode_cntl_0 = S_028A48_VPORT_SCISSOR_ENABLE(1);
