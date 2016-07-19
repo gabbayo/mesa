@@ -145,10 +145,26 @@ static unsigned radv_map_swizzle(unsigned swizzle)
 	}
 }
 
-static unsigned radv_tex_dim(unsigned res_target, unsigned view_target,
-			   unsigned nr_samples)
+static unsigned radv_tex_dim(VkImageType image_type, VkImageViewType view_type,
+			     unsigned nr_samples)
 {
-   return V_008F1C_SQ_RSRC_IMG_2D;
+	switch (view_type) {
+	case VK_IMAGE_VIEW_TYPE_1D:
+		return V_008F1C_SQ_RSRC_IMG_1D;
+	case VK_IMAGE_VIEW_TYPE_1D_ARRAY:
+		return V_008F1C_SQ_RSRC_IMG_1D_ARRAY;
+	case VK_IMAGE_VIEW_TYPE_2D:
+		return nr_samples > 1 ? V_008F1C_SQ_RSRC_IMG_2D_MSAA :
+					V_008F1C_SQ_RSRC_IMG_2D;
+	case VK_IMAGE_VIEW_TYPE_2D_ARRAY:
+		return nr_samples > 1 ? V_008F1C_SQ_RSRC_IMG_2D_MSAA_ARRAY :
+					V_008F1C_SQ_RSRC_IMG_2D_ARRAY;
+	case VK_IMAGE_VIEW_TYPE_3D:
+		return V_008F1C_SQ_RSRC_IMG_3D;
+	case VK_IMAGE_VIEW_TYPE_CUBE:
+	case VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
+		return V_008F1C_SQ_RSRC_IMG_CUBE;
+	}
 }
 /**
  * Build the sampler view descriptor for a texture.
@@ -157,6 +173,7 @@ static void
 si_make_texture_descriptor(struct radv_device *device,
 			   struct radv_image *image,
 			   bool sampler,
+			   VkImageViewType view_type,
 			   VkFormat vk_format,
 			   const unsigned char state_swizzle[4],
 			   unsigned first_level, unsigned last_level,
@@ -266,7 +283,7 @@ si_make_texture_descriptor(struct radv_device *device,
 		type = radv_tex_dim(res->target, target, res->nr_samples);
 	}
 #endif
-	type = radv_tex_dim(image->type, 0, image->samples);
+	type = radv_tex_dim(image->type, view_type, image->samples);
 #if 0	
 	if (type == V_008F1C_SQ_RSRC_IMG_1D_ARRAY) {
 	        height = 1;
@@ -391,7 +408,7 @@ radv_query_opaque_metadata(struct radv_device *device,
 
 
    si_make_texture_descriptor(device, image, true,
-			      image->vk_format,
+			      (VkImageViewType)image->type, image->vk_format,
 			      swizzle, 0, image->levels - 1, 0,
 			      0, //is_array ? image->array_size - 1 : 0,
 			      image->extent.width, image->extent.height,
@@ -514,7 +531,7 @@ radv_image_view_init(struct radv_image_view *iview,
    }
    iview->image = image;
    iview->bo = image->bo;
-
+   iview->type = pCreateInfo->viewType;
    iview->vk_format = pCreateInfo->format;
    iview->aspect_mask = pCreateInfo->subresourceRange.aspectMask;
 
@@ -533,6 +550,7 @@ radv_image_view_init(struct radv_image_view *iview,
       VK_SWIZZLE_W
    };
    si_make_texture_descriptor(device, image, false,
+			      iview->type,
 			      pCreateInfo->format,
 			      swizzle,
 			      range->baseMipLevel,

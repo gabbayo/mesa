@@ -841,6 +841,7 @@ struct radv_image_view {
    struct radv_bo *bo;
    uint32_t offset; /**< Offset into bo. */
 
+   VkImageViewType type;
    VkImageAspectFlags aspect_mask;
    VkFormat vk_format;
    uint32_t base_layer;
