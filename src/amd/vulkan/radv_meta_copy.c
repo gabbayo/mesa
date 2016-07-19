@@ -22,18 +22,12 @@
  */
 
 #include "radv_meta.h"
-
+#include "vk_format.h"
 static VkExtent3D
 meta_image_block_size(const struct radv_image *image)
 {
-   if (image->aspects == VK_IMAGE_ASPECT_COLOR_BIT) {
-     //      const struct isl_format_layout *isl_layout =
-     //         isl_format_get_layout(image->color_surface.isl.format);
-     //      return (VkExtent3D) { isl_layout->bw, isl_layout->bh, isl_layout->bd };
-     return (VkExtent3D) { 1, 1, 1 };
-   } else {
-      return (VkExtent3D) { 1, 1, 1 };
-   }
+   const struct vk_format_description *desc = vk_format_description(image->vk_format);
+   return (VkExtent3D) { desc->block.width, desc->block.height, 1 };
 }
 
 /* Returns the user-provided VkBufferImageCopy::imageExtent in units of
@@ -72,8 +66,13 @@ static struct radv_meta_blit2d_surf
 blit_surf_for_image(const struct radv_image* image,
                     const struct radeon_surf *surf)
 {
+    int tiling = RADEON_SURF_GET(surf->flags, MODE) == RADEON_SURF_MODE_LINEAR_ALIGNED ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
    return (struct radv_meta_blit2d_surf) {
-      .bo = image->bo,
+       .bo = image->bo,
+       .base_offset = image->offset,
+       .bs = vk_format_get_blocksize(image->vk_format),
+       .pitch = surf->level[0].pitch_bytes,
+       .tiling = tiling,
    };
 }
 
@@ -154,14 +153,16 @@ meta_copy_buffer_to_image(struct radv_cmd_buffer *cmd_buffer,
 
       /* Create blit surfaces */
       VkImageAspectFlags aspect = pRegions[r].imageSubresource.aspectMask;
-      const struct radeon_surf *img_surf = NULL;
-      //         radv_image_get_surface_for_aspect_mask(image, aspect);
+      const struct radeon_surf *img_surf = &image->surface;
       struct radv_meta_blit2d_surf img_bsurf =
          blit_surf_for_image(image, img_surf);
       struct radv_meta_blit2d_surf buf_bsurf = {
          .bo = buffer->bo,
          .base_offset = buffer->offset + pRegions[r].bufferOffset,
+	 .bs = img_bsurf.bs,
          .pitch = buf_extent_el.width * buf_bsurf.bs,
+
+	 .tiling = VK_IMAGE_TILING_LINEAR,
       };
 
       /* Set direction-dependent variables */
@@ -272,13 +273,8 @@ void radv_CmdCopyImage(
       VkImageAspectFlags aspect = pRegions[r].srcSubresource.aspectMask;
 
       /* Create blit surfaces */
-#if 0
-      struct radeon_surf *src_surf =
-         radv_image_get_surface_for_aspect_mask(src_image, aspect);
-      struct radeon_surf *dst_surf =
-         radv_image_get_surface_for_aspect_mask(dest_image, aspect);
-#endif
-      struct radeon_surf *src_surf, *dst_surf;
+      struct radeon_surf *src_surf = &src_image->surface;
+      struct radeon_surf *dst_surf = &dest_image->surface;
       struct radv_meta_blit2d_surf b_src =
          blit_surf_for_image(src_image, src_surf);
       struct radv_meta_blit2d_surf b_dst =
