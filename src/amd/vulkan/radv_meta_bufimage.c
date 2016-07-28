@@ -31,9 +31,12 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 	
 	nir_ssa_def *invoc_id = nir_load_system_value(&b, nir_intrinsic_load_local_invocation_id, 0);
 	nir_ssa_def *wg_id = nir_load_system_value(&b, nir_intrinsic_load_work_group_id, 0);
-	nir_ssa_def *wg_size = nir_load_system_value(&b, nir_intrinsic_load_num_work_groups, 0);
+	nir_ssa_def *block_size = nir_imm_ivec4(&b,
+						b.shader->info.cs.local_size[0],
+						b.shader->info.cs.local_size[1],
+						b.shader->info.cs.local_size[2], 0);
 
-	nir_ssa_def *global_id = nir_iadd(&b, nir_imul(&b, wg_id, wg_size), invoc_id);
+	nir_ssa_def *global_id = nir_iadd(&b, nir_imul(&b, wg_id, block_size), invoc_id);
 	nir_tex_instr *tex = nir_tex_instr_create(b.shader, 2);
 	tex->sampler_dim = GLSL_SAMPLER_DIM_2D;
 	tex->op = nir_texop_txf;
@@ -52,11 +55,12 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 
 	nir_ssa_def *pos_x = nir_channel(&b, global_id, 0);
 	nir_ssa_def *pos_y = nir_channel(&b, global_id, 1);
-	nir_ssa_def *width = nir_channel(&b, wg_size, 0);
+	nir_ssa_def *width = nir_channel(&b, block_size, 0);
 
 	nir_ssa_def *tmp = nir_imul(&b, pos_y, width);
 	tmp = nir_iadd(&b, tmp, pos_x);
 
+	//	tmp = nir_imul(&b, tmp, nir_channel(&b, block_size, 0));
 	nir_ssa_def *coord = nir_vec4(&b, tmp, tmp, tmp, tmp);
 
 #if 1
