@@ -16,7 +16,7 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 							     GLSL_TYPE_FLOAT);
 	nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_COMPUTE, NULL);
 	b.shader->info.name = ralloc_strdup(b.shader, "meta_itob_cs");
-	b.shader->info.cs.local_size[0] = 1;
+	b.shader->info.cs.local_size[0] = 4;
 	b.shader->info.cs.local_size[1] = 1;
 	b.shader->info.cs.local_size[2] = 1;
 	nir_variable *input_img = nir_variable_create(b.shader, nir_var_uniform,
@@ -56,12 +56,11 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 
 	nir_ssa_def *pos_x = nir_channel(&b, global_id, 0);
 	nir_ssa_def *pos_y = nir_channel(&b, global_id, 1);
-	nir_ssa_def *width = nir_channel(&b, wg_size, 0);
+	nir_ssa_def *width = nir_channel(&b, nir_imul(&b, wg_size, block_size), 0);
 
 	nir_ssa_def *tmp = nir_imul(&b, pos_y, width);
 	tmp = nir_iadd(&b, tmp, pos_x);
 
-	//	tmp = nir_imul(&b, tmp, nir_channel(&b, num_work_groups, 0));
 	nir_ssa_def *coord = nir_vec4(&b, tmp, tmp, tmp, tmp);
 
 #if 1
@@ -436,7 +435,7 @@ radv_meta_image_to_buffer(struct radv_cmd_buffer *cmd_buffer,
 
 		bind_pipeline(cmd_buffer);
 
-		radv_CmdDispatch(radv_cmd_buffer_to_handle(cmd_buffer), rects[r].width, rects[r].height, 1);
+		radv_CmdDispatch(radv_cmd_buffer_to_handle(cmd_buffer), rects[r].width / 4, rects[r].height, 1);
 		radv_temp_descriptor_set_destroy(cmd_buffer->device, temps.set);
 		itob_unbind_src_image(cmd_buffer, &temps);
 	}
