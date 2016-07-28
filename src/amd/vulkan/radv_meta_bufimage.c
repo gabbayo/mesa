@@ -16,7 +16,7 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 							     GLSL_TYPE_FLOAT);
 	nir_builder_init_simple_shader(&b, NULL, MESA_SHADER_COMPUTE, NULL);
 	b.shader->info.name = ralloc_strdup(b.shader, "meta_itob_cs");
-	b.shader->info.cs.local_size[0] = 4;
+	b.shader->info.cs.local_size[0] = 1;
 	b.shader->info.cs.local_size[1] = 1;
 	b.shader->info.cs.local_size[2] = 1;
 	nir_variable *input_img = nir_variable_create(b.shader, nir_var_uniform,
@@ -31,6 +31,7 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 	
 	nir_ssa_def *invoc_id = nir_load_system_value(&b, nir_intrinsic_load_local_invocation_id, 0);
 	nir_ssa_def *wg_id = nir_load_system_value(&b, nir_intrinsic_load_work_group_id, 0);
+	nir_ssa_def *wg_size = nir_load_system_value(&b, nir_intrinsic_load_num_work_groups, 0);
 	nir_ssa_def *block_size = nir_imm_ivec4(&b,
 						b.shader->info.cs.local_size[0],
 						b.shader->info.cs.local_size[1],
@@ -55,20 +56,20 @@ build_nir_itob_compute_shader(struct radv_device *dev)
 
 	nir_ssa_def *pos_x = nir_channel(&b, global_id, 0);
 	nir_ssa_def *pos_y = nir_channel(&b, global_id, 1);
-	nir_ssa_def *width = nir_channel(&b, block_size, 0);
+	nir_ssa_def *width = nir_channel(&b, wg_size, 0);
 
 	nir_ssa_def *tmp = nir_imul(&b, pos_y, width);
 	tmp = nir_iadd(&b, tmp, pos_x);
 
-	//	tmp = nir_imul(&b, tmp, nir_channel(&b, block_size, 0));
+	//	tmp = nir_imul(&b, tmp, nir_channel(&b, num_work_groups, 0));
 	nir_ssa_def *coord = nir_vec4(&b, tmp, tmp, tmp, tmp);
 
 #if 1
 	nir_ssa_def *outval = &tex->dest.ssa;
 #else
 	nir_ssa_def *outval = nir_vec4(&b, nir_channel(&b, &tex->dest.ssa, 0),
-				       nir_fdiv(&b, pos_x, nir_imm_float(&b, 100.0)),
-				       nir_fdiv(&b, pos_y, nir_imm_float(&b, 100.0)),
+				       nir_fdiv(&b, nir_i2f(&b, pos_x), nir_imm_float(&b, 100.0)),
+				       nir_fdiv(&b, nir_i2f(&b, pos_y), nir_imm_float(&b, 100.0)),
 				       nir_channel(&b, &tex->dest.ssa, 3));
 #endif
 	nir_intrinsic_instr *store = nir_intrinsic_instr_create(b.shader, nir_intrinsic_image_store);
